@@ -30,6 +30,7 @@ namespace MuMech
 
         private bool ready = false;
 
+        public MechJebModuleGuidanceController guidance;
         public MechJebModuleAttitudeController attitude;
         public MechJebModuleStagingController staging;
         public MechJebModuleThrustController thrust;
@@ -44,6 +45,8 @@ namespace MuMech
         public MechJebModuleLandingAutopilot landing;
         public MechJebModuleSettings settings;
         public MechJebModuleAirplaneAutopilot airplane;
+        public MechJebModuleStageStats stageStats;
+        public MechJebModuleLogicalStageTracking stageTracking;
 
         public VesselState vesselState = new VesselState();
         [KSPField(isPersistant = true, guiActive = true, guiActiveEditor = true, guiName = "MechJeb"), UI_Toggle(disabledText = "Disabled", enabledText = "Enabled")]
@@ -55,7 +58,7 @@ namespace MuMech
         {
             get { return vessel.GetMasterMechJeb(); }
         }
-        
+
         // Allow other mods to kill MJ ability to control vessel (RemoteTech, RO...)
         public bool DeactivateControl
         {
@@ -144,68 +147,16 @@ namespace MuMech
             {
                 MechJebModuleSmartASS masterSmartASS = masterMechJeb.GetComputerModule<MechJebModuleSmartASS>();
 
-                if (!masterSmartASS.hidden)
+                if (masterSmartASS != null && !masterSmartASS.hidden)
                 {
-                    EngageSmartASSControl(MechJebModuleSmartASS.Mode.ORBITAL, target, false);
-                }
-            }
-        }
-
-        public void EngageSmartASSControl(MechJebModuleSmartASS.Mode mode, MechJebModuleSmartASS.Target target, bool forceEnable)
-        {
-            MechJebCore masterMechJeb = this.vessel.GetMasterMechJeb();
-
-            if (masterMechJeb != null)
-            {
-                MechJebModuleSmartASS masterSmartASS = masterMechJeb.GetComputerModule<MechJebModuleSmartASS>();
-
-                if (masterSmartASS != null)
-                {
-                    if (forceEnable)
-                    {
-                        // Prevent that the presence of other attitude controllers disables SmartASS
-                        masterSmartASS.autoDisableSmartASS = false;
-                    }
-                    masterSmartASS.mode = mode;
+                    masterSmartASS.mode = MechJebModuleSmartASS.Mode.ORBITAL;
                     masterSmartASS.target = target;
 
                     masterSmartASS.Engage();
-                    masterSmartASS.enabled = true; // show GUI
                 }
                 else
                 {
-                    Debug.LogError("MechJeb couldn't find MechJebModuleSmartASS for control.");
-                }
-            }
-            else
-            {
-                Debug.LogError("MechJeb couldn't find the master MechJeb module for the current vessel.");
-            }
-        }
-
-        public void EngageSmartRcsControl(MechJebModuleSmartRcs.Target target, bool forceEnable)
-        {
-            MechJebCore masterMechJeb = this.vessel.GetMasterMechJeb();
-
-            if (masterMechJeb != null)
-            {
-                MechJebModuleSmartRcs masterSmartRcs = masterMechJeb.GetComputerModule<MechJebModuleSmartRcs>();
-
-                if (masterSmartRcs != null)
-                {
-                    if (forceEnable)
-                    {
-                        // Prevent that the presence of other rcs controllers disables SmartRcs
-                        masterSmartRcs.autoDisableSmartRCS = false;
-                    }
-                    masterSmartRcs.target = target;
-
-                    masterSmartRcs.Engage();
-                    masterSmartRcs.enabled = true; // show GUI
-                }
-                else
-                {
-                    Debug.LogError("MechJeb couldn't find MechJebModuleSmartRcs for control.");
+                    Debug.LogError("MechJeb couldn't find MechJebModuleSmartASS for orbital control via action group.");
                 }
             }
             else
@@ -420,7 +371,7 @@ namespace MuMech
             sortedModules[key] = value = unorderedComputerModules.OfType<T>().Cast<ComputerModule>().OrderBy(m => m).ToList();
             return value;
         }
-        
+
         // Added because the generic version eats memory like candy when casting from ComputerModule to DisplayModule (.Cast<T>())
         public List<DisplayModule> GetDisplayModules(IComparer<DisplayModule> comparer)
         {
@@ -807,6 +758,9 @@ namespace MuMech
             landing = GetComputerModule<MechJebModuleLandingAutopilot>();
             settings = GetComputerModule<MechJebModuleSettings>();
             airplane = GetComputerModule<MechJebModuleAirplaneAutopilot>();
+            guidance = GetComputerModule<MechJebModuleGuidanceController>();
+            stageStats = GetComputerModule<MechJebModuleStageStats>();
+            stageTracking = GetComputerModule<MechJebModuleLogicalStageTracking>();
         }
 
         public override void OnLoad(ConfigNode sfsNode)
@@ -1069,6 +1023,10 @@ namespace MuMech
 
         private void Drive(FlightCtrlState s)
         {
+            Profiler.BeginSample("vesselState");
+            ready = vesselState.Update(vessel);
+            Profiler.EndSample();
+
             Profiler.BeginSample("MechJebCore.Drive");
             if (this == vessel.GetMasterMechJeb())
             {

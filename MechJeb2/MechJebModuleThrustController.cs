@@ -62,12 +62,12 @@ namespace MuMech
         [Persistent(pass = (int)Pass.Global)]
         public bool limitToPreventOverheats = false;
 
-        [GeneralInfoItem("Prevent overheats", InfoItem.Category.Thrust)]
+        [GeneralInfoItem("Prevent engine overheats", InfoItem.Category.Thrust)]
         public void LimitToPreventOverheatsInfoItem()
         {
             GUIStyle s = new GUIStyle(GUI.skin.toggle);
             if (limiter == LimitMode.Temperature) s.onHover.textColor = s.onNormal.textColor = Color.green;
-            limitToPreventOverheats = GUILayout.Toggle(limitToPreventOverheats, "Prevent overheats", s);
+            limitToPreventOverheats = GUILayout.Toggle(limitToPreventOverheats, "Prevent engine overheats", s);
         }
 
         [ToggleInfoItem("Smooth throttle", InfoItem.Category.Thrust)]
@@ -89,7 +89,7 @@ namespace MuMech
         }
 
         [Persistent(pass = (int)Pass.Global)]
-        public bool limitToPreventUnstableIgnition = true;
+        public bool limitToPreventUnstableIgnition = false;
 
         [GeneralInfoItem("Prevent unstable ignition", InfoItem.Category.Thrust)]
         public void LimitToPreventUnstableIgnitionInfoItem()
@@ -102,7 +102,7 @@ namespace MuMech
         [Persistent(pass = (int)Pass.Global)]
         public bool autoRCSUllaging = true;
 
-        [GeneralInfoItem("Prevent unstable ignition", InfoItem.Category.Thrust)]
+        [GeneralInfoItem("Use RCS to ulllage", InfoItem.Category.Thrust)]
         public void AutoRCsUllageInfoItem()
         {
             GUIStyle s = new GUIStyle(GUI.skin.toggle);
@@ -268,8 +268,11 @@ namespace MuMech
             }
         }
 
+        ScreenMessage preventingUnstableIgnitionsMessage;
+
         public override void OnStart(PartModule.StartState state)
         {
+            preventingUnstableIgnitionsMessage = new ScreenMessage("<color=orange>[MechJeb]: Killing throttle to prevent unstable ignition</color>", 2f, ScreenMessageStyle.UPPER_CENTER);
             pid = new PIDController(0.05, 0.000001, 0.05);
             users.Add(this);
 
@@ -540,6 +543,7 @@ namespace MuMech
             {
                 if (vesselState.lowestUllage < VesselState.UllageState.Stable)
                 {
+                    ScreenMessages.PostScreenMessage(preventingUnstableIgnitionsMessage);
                     Debug.Log("MechJeb Unstable Ignitions: preventing ignition in state: " + vesselState.lowestUllage);
                     setTempLimit(0.0F, LimitMode.UnstableIgnition);
                 }
@@ -784,7 +788,7 @@ namespace MuMech
         }
 
         bool ElectricEngineRunning() {
-            var activeEngines = vessel.parts.Where(p => p.inverseStage >= StageManager.CurrentStage && p.IsEngine() && !p.IsSepratron());
+            var activeEngines = vessel.parts.Where(p => p.inverseStage >= vessel.currentStage && p.IsEngine() && !p.IsSepratron());
             var engineModules = activeEngines.Select(p => p.Modules.OfType<ModuleEngines>().First(e => e.isEnabled));
 
             return engineModules.SelectMany(eng => eng.propellants).Any(p => p.id == PartResourceLibrary.ElectricityHashcode);

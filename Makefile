@@ -9,13 +9,13 @@ else
 			XDG_DATA_HOME := ${HOME}/.local/share
 		endif
 		ifndef KSPDIR
-			KSPDIR := ${XDG_DATA_HOME}/Steam/steamapps/common/Kerbal Space Program
+			KSPDIR := ${XDG_DATA_HOME}/Steam/SteamApps/common/Kerbal Space Program
 		endif
 		MANAGED := ${KSPDIR}/KSP_Data/Managed/
 	endif
 	ifeq ($(UNAME_S),Darwin)
 		ifndef KSPDIR
-			KSPDIR  := ${HOME}/Library/Application Support/Steam/SteamApps/common/Kerbal Space Program
+			KSPDIR  := ${HOME}/Library/Application Support/Steam/steamapps/common/Kerbal Space Program
 		endif
 		ifndef MANAGED
 		MANAGED := ${KSPDIR}/KSP.app/Contents/Resources/Data/Managed/
@@ -53,11 +53,12 @@ info:
 
 build: build/MechJeb2.dll
 
+
 build/%.dll: ${MECHJEBFILES}
 	mkdir -p build
 	${RESGEN2} -usesourcepath MechJeb2/Properties/Resources.resx build/Resources.resources
 	${MCS} -t:library -lib:"${MANAGED}" \
-		-r:Assembly-CSharp,Assembly-CSharp-firstpass,UnityEngine,UnityEngine.UI \
+		-r:Assembly-CSharp,Assembly-CSharp-firstpass,UnityEngine,UnityEngine.UI,,UnityEngine.CoreModule,UnityEngine.IMGUIModule,UnityEngine.VehiclesModule,UnityEngine.PhysicsModule,UnityEngine.AnimationModule,UnityEngine.TextRenderingModule \
 		-out:$@ \
 		${MECHJEBFILES} \
 		-resource:build/Resources.resources,MuMech.Properties.Resources.resources
