@@ -8,18 +8,18 @@ SET TargetName=%3
 
 echo %TargetPath% %TargetDir% %TargetName%
 
-IF EXIST %PDB2MDB% ( 
+IF EXIST "%PDB2MDB%" ( 
 	%PDB2MDB% %TargetPath%
 ) ELSE (
 	echo Unable to find %PDB2MDB%
 )
 
-IF NOT EXIST %KSPDIR%\* (
+IF NOT EXIST "%KSPDIR%\*" (
 	echo Expected "%KSPDIR%" to point to a directory but it is not
 	exit 0
 )
 
-IF NOT EXIST %KSPDIR%\GameData\MechJeb2\Plugins\* (
+IF NOT EXIST "%KSPDIR%\GameData\MechJeb2\Plugins\*" (
 	echo Expected "%KSPDIR%" to contain a GameData\MechJeb2\Plugins subdirectory but it does not'
 	exit 1
 )
