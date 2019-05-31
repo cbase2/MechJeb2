@@ -170,7 +170,7 @@ namespace MuMech
             }
         }
 
-        private double BurnTime(double dv, out double halfBurnTime)
+        public double BurnTime(double dv, out double halfBurnTime)
         {
             double dvLeft = dv;
             double halfDvLeft = dv / 2;
