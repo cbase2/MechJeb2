@@ -15,7 +15,6 @@ namespace MuMech {
         double vTm;
         double gamma;
         double inc;
-        double smaT;
         Vector3d hT;
 
         // 5-constraint PEG with fixed LAN

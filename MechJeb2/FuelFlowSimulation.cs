@@ -816,7 +816,6 @@ namespace MuMech
                 resourceConsumptions.Clear();
                 propellantFlows.Clear();
 
-                double sumThrustOverIsp = 0;
                 partThrust = 0;
 
                 isDrawingResources = false;
