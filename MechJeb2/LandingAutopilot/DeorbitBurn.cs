@@ -42,7 +42,7 @@ namespace MuMech
                     Quaternion freefallPlanetRotation = Quaternion.AngleAxis((float)planetRotationDuringFreefall, mainBody.angularVelocity);   //Construct a quaternion representing the rotation of the planet found above
                     Vector3d freefallEndTargetRadialVector = freefallPlanetRotation * currentTargetRadialVector;                               //Use this quaternion to find what the vector from the planet center to the target will be when we hit the ground
                     Vector3d freefallEndTargetPosition = mainBody.position + freefallEndTargetRadialVector;                                    //Then find the actual position of the target at that time
-                    Vector3d freefallEndHorizontalToTarget = Vector3d.Exclude(vesselState.up, freefallEndTargetPosition - vesselState.CoM).normalized; //Find a horizontal unit vector that points toward where the target will be when we hit the ground
+                    Vector3d freefallEndHorizontalToTarget = Vector3d.Exclude(freefallEndTargetRadialVector, freefallEndTargetPosition - vesselState.CoM).normalized; //Find a horizontal unit vector that points toward where the target will be when we hit the ground
                     Vector3d currentHorizontalVelocity = Vector3d.Exclude(vesselState.up, vesselState.orbitalVelocity); //Find our current horizontal velocity
                     double finalHorizontalSpeed = (currentHorizontalVelocity + horizontalDV).magnitude;                     //Find the desired horizontal speed after the deorbit burn
                     Vector3d finalHorizontalVelocity = finalHorizontalSpeed * freefallEndHorizontalToTarget;                //Combine the desired speed and direction to get the desired velocity after the deorbi burn
@@ -52,21 +52,24 @@ namespace MuMech
                     double targetAngleToOrbitNormal = Vector3d.Angle(orbit.SwappedOrbitNormal(), freefallEndTargetRadialVector);
                     targetAngleToOrbitNormal = Math.Min(targetAngleToOrbitNormal, 180 - targetAngleToOrbitNormal);
 
-                    double targetAheadAngle = Vector3d.Angle(currentRadialVector, freefallEndTargetRadialVector); //How far ahead the target is, in degrees
-                    double planeChangeAngle = Vector3d.Angle(currentHorizontalVelocity, freefallEndHorizontalToTarget); //The plane change required to get onto the deorbit trajectory, in degrees
+                    float targetAheadAngle = Vector3.SignedAngle(currentRadialVector, freefallEndTargetRadialVector, orbit.SwappedOrbitNormal()); //How far ahead the target is, in degrees
+                    if (targetAheadAngle < 60) targetAheadAngle += 360;
+
+                    float planeChangeAngle = Vector3.Angle(currentHorizontalVelocity, freefallEndHorizontalToTarget); //The plane change required to get onto the deorbit trajectory, in degrees
 
                     vessel.RemoveAllManeuverNodes();
 
                     //If the target is basically almost normal to our orbit, it doesn't matter when we deorbit; might as well do it now
                     //Otherwise, wait until the target is ahead
                     if (targetAngleToOrbitNormal < 10
-                        || (targetAheadAngle < 90 && targetAheadAngle > 60 && planeChangeAngle < 90))
+                        || (targetAheadAngle < 90 && planeChangeAngle < 90))
                     {
-                        vessel.PlaceManeuverNode(vessel.orbit, finalHorizontalVelocity - currentHorizontalVelocity, vesselState.time);
+                        vessel.PlaceManeuverNode(vessel.orbit, horizontalDV, vesselState.time);
                     }
                     else
                     {
-                        vessel.PlaceManeuverNode(vessel.orbit, finalHorizontalVelocity - currentHorizontalVelocity, vesselState.time + (targetAheadAngle - 90) * orbit.period / 360f);
+                        double deorbitTime = vesselState.time + (targetAheadAngle - 90) * orbit.period / 360f;
+                        vessel.PlaceManeuverNode(vessel.orbit, OrbitalManeuverCalculator.DeltaVToChangePeriapsis(orbit, deorbitTime, 0.9 * mainBody.Radius), deorbitTime );
                     }
                 }
 
