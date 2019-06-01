@@ -22,6 +22,8 @@ namespace MuMech
         public EditableInt limitChutesStage = 0;
         [Persistent(pass = (int)(Pass.Local | Pass.Type | Pass.Global))]
         public bool rcsAdjustment = true;
+        [Persistent(pass = (int)(Pass.Local | Pass.Type | Pass.Global))]
+        public EditableInt reentryTargetHeight = 27000;
 
         // This is used to adjust the height at which the parachutes semi deploy as a means of
         // targeting the landing in an atmosphere where it is not possible to control atitude
@@ -140,6 +142,8 @@ namespace MuMech
                 setStep(new Landing.CourseCorrection(core));
             else if (UseLowDeorbitStrategy())
                 setStep(new Landing.PlaneChange(core));
+            else if (mainBody.atmosphere)
+                setStep(new Landing.AtmosphericDeorbit(core));
             else
                 setStep(new Landing.DeorbitBurn(core));
         }

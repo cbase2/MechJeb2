@@ -1,7 +1,6 @@
 ﻿using System;
 using UnityEngine;
 
-// FIXME: use a maneuver node
 
 namespace MuMech
 {

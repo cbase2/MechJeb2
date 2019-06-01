@@ -125,6 +125,11 @@ namespace MuMech
                     GUILayout.EndHorizontal();
                 }
 
+                if (mainBody.atmosphere)
+                {
+                    GuiUtils.SimpleTextBox("Reentry periapsis height:", core.landing.reentryTargetHeight, "m", 80);
+                }
+                
                 GuiUtils.SimpleTextBox("Touchdown speed:", core.landing.touchdownSpeed, "m/s", 35);
 
                 if (core.landing != null) core.node.autowarp = GUILayout.Toggle(core.node.autowarp, "Auto-warp");
