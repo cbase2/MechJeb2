@@ -87,6 +87,7 @@
     <Compile Include="GuiUtils.cs" />
     <Compile Include="InstallChecker.cs" />
     <Compile Include="LambertSolver.cs" />
+    <Compile Include="LandingAutopilot\AtmosphericBehaviour.cs" />
     <Compile Include="LandingAutopilot\AtmosphericCorrection.cs" />
     <Compile Include="LandingAutopilot\AtmosphericDeorbit.cs" />
     <Compile Include="LandingAutopilot\CoastToDeceleration.cs" />
