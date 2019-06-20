@@ -434,7 +434,10 @@ namespace MuMech
             // Only set throttle if a module need it. Otherwise let the user or other mods set it
             // There is always at least 1 user : the module itself (why ?)
             if (users.Count > 1)
+            {
                 s.mainThrottle = targetThrottle;
+                //Debug.Log(String.Format("MechJeb Thrust setting vessel thrust to {0:F2}", targetThrottle));
+            }
 
             throttleLimit = 1;
             throttleFixedLimit = 1;

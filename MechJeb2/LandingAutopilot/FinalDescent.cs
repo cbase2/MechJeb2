@@ -38,6 +38,8 @@ namespace MuMech
                 if (vessel.LandedOrSplashed)
                 {
                     core.landing.StopLanding();
+                    vessel.ActionGroups.SetGroup(KSPActionGroup.SAS, true);
+                    vessel.Autopilot.Enable(VesselAutopilot.AutopilotMode.RadialIn);
                     return null;
                 }
 
@@ -68,6 +70,20 @@ namespace MuMech
                         core.attitude.attitudeTo(Vector3d.back, AttitudeReference.SURFACE_VELOCITY, null);
                         core.thrust.tmode = MechJebModuleThrustController.TMode.DIRECT;
                         core.thrust.trans_spd_act = 0;
+                    }
+                    else if (mainBody.atmosphere)
+                    {
+                        // rely on parachutes to get down to 200m
+                        core.attitude.attitudeTo(Vector3d.back, AttitudeReference.SURFACE_VELOCITY, null);
+                        core.thrust.tmode = MechJebModuleThrustController.TMode.DIRECT;
+                        core.thrust.trans_spd_act = 0;
+                        foreach (var p in vesselState.parachutes)
+                        {
+                            if (p.deploymentState == ModuleParachute.deploymentStates.STOWED
+                                && p.deploymentSafeState == ModuleParachute.deploymentSafeStates.SAFE)
+                                    p.Deploy();
+                        }
+
                     }
                     else
                     {

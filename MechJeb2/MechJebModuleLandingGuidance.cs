@@ -128,6 +128,7 @@ namespace MuMech
                 if (mainBody.atmosphere)
                 {
                     GuiUtils.SimpleTextBox("Reentry periapsis height:", core.landing.reentryTargetHeight, "m", 80);
+                    GuiUtils.SimpleTextBox("Reentry overshoot target:", core.landing.reentryTargetAhead, "m", 80);
                 }
                 
                 GuiUtils.SimpleTextBox("Touchdown speed:", core.landing.touchdownSpeed, "m/s", 35);

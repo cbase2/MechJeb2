@@ -83,10 +83,11 @@ namespace MuMech
                     status = "Executing node";
                     if (!MuUtils.PhysicsRunning()) core.warp.MinimumWarp();
                 }
+
                 //autowarp, but only if we're already aligned with the node
                 if (core.node.autowarp && !burnTriggered)
                 {
-                    if ((core.attitude.attitudeAngleFromTarget() < 1 && core.vessel.angularVelocity.magnitude < 0.001) || (core.attitude.attitudeAngleFromTarget() < 10 && !MuUtils.PhysicsRunning()))
+                    if ((core.attitude.attitudeAngleFromTarget() < 1 && core.vessel.angularVelocity.magnitude < 0.01) || (core.attitude.attitudeAngleFromTarget() < 10 && !MuUtils.PhysicsRunning()))
                     {
                         core.warp.WarpToUT(node.UT - halfBurnTime - core.node.leadTime);
                     }
