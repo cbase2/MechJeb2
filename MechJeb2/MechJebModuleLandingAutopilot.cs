@@ -27,6 +27,8 @@ namespace MuMech
         [Persistent(pass = (int)(Pass.Local | Pass.Type | Pass.Global))]
         public EditableInt reentryTargetAhead = 40000;
 
+        public double origAngle, minAngle, maxAngle, factor;
+
         // This is used to adjust the height at which the parachutes semi deploy as a means of
         // targeting the landing in an atmosphere where it is not possible to control atitude
         // to perform course correction burns.
