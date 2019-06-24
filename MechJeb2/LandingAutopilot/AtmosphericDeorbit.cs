@@ -94,8 +94,8 @@ namespace MuMech
                     Vector3d currentTargetRadialVector = mainBody.GetWorldSurfacePosition(core.target.targetLatitude, core.target.targetLongitude, 0) - mainBody.position;
                     Vector3 orbitNormal = orbit.SwappedOrbitNormal();
                     
-                    Vector3 orbitClosestToTarget = Vector3.ProjectOnPlane(currentTargetRadialVector, orbitNormal).normalized;
-                    Vector3 targetForward = Vector3.Cross(orbitClosestToTarget, orbitNormal);
+                    Vector3 orbitClosestToTarget = Vector3.ProjectOnPlane(currentTargetRadialVector, orbitNormal);
+                    Vector3 targetForward = Vector3.Cross(orbitClosestToTarget.normalized, orbitNormal);
 
                     orbitClosestToTarget -= core.landing.reentryTargetAhead * targetForward;
                     Vector3d differenceTarget = orbitClosestToTarget - currentImpactRadialVector;
@@ -108,9 +108,9 @@ namespace MuMech
 
                     double forwardDifference = Vector3d.Dot(differenceTarget, targetForward); /* = overshoot < 0, too short > 0 */
 
-                    //Debug.Log(String.Format("Autoland: currentImpactRadialVector={0:F3} currentTargetRadialVector={1:F3} differenceTarget={2:F1}", currentImpactRadialVector, currentTargetRadialVector.normalized, differenceTarget));
-                    //Debug.Log(String.Format("Autoland: orbitClosestToTarget={0:F3} orbitNormal={1:F3} targetForward={2:F3} ", orbitClosestToTarget, orbit.SwappedOrbitNormal(), targetForward));
-                    //Debug.Log(String.Format("Autoland: normalDiff={0:F1}, backwardDiff={1:F1}", normalDifference, backwardDifference));
+                    Debug.Log(String.Format("Autoland: currentImpactRadialVector={0} currentTargetRadialVector={1} differenceTarget={2}", currentImpactRadialVector, currentTargetRadialVector, differenceTarget));
+                    Debug.Log(String.Format("Autoland: orbitClosestToTarget={0} orbitNormal={1} targetForward={2} ", orbitClosestToTarget, orbit.SwappedOrbitNormal(), targetForward.ToString("F3")));
+                    Debug.Log(String.Format("Autoland: normalDiff={0:F1}, backwardDiff={1:F1}", normalDifference, forwardDifference));
 
                     if (Math.Abs(targetAheadAngle) < 0.5 && Math.Abs(forwardDifference) < deorbitprecision)
                     {
@@ -122,15 +122,14 @@ namespace MuMech
                         //move Node
                         ManeuverNode plannedNode = vessel.patchedConicSolver.maneuverNodes[0];
                         double deorbitTime = plannedNode.UT;
-                        double adoptionRate = 1;
 
                         if (Math.Abs(targetAheadAngle) < 0.5) // for small changes use tangential calculation, otherwise angluar
                         {
-                            deorbitTime -= adoptionRate * forwardDifference / vesselState.speedSurfaceHorizontal;
+                            deorbitTime -= forwardDifference / vesselState.speedSurfaceHorizontal;
                         }
                         else
                         {
-                            deorbitTime -= adoptionRate * targetAheadAngle * orbit.period / 360f;
+                            deorbitTime -= targetAheadAngle * orbit.period / 360f;
                         }
 
                         if (deorbitTime < vesselState.time) deorbitTime += orbit.period;
