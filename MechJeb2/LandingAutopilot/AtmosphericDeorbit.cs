@@ -84,12 +84,12 @@ namespace MuMech
             bool optimizeNode()
             {
                 // primary calculations come from trajectories
-                Vector3d currentImpactRadialVector = Trajectories.API.GetImpactPosition() ?? Vector3d.zero; // relativ Vector to impact position on surface at current time
+                Vector3d? impactPos = Trajectories.API.GetImpactPosition(); // relativ Vector to impact position on surface at current time
 
-                if (currentImpactRadialVector != Vector3d.zero &&
-                    (currentImpactRadialVector - lastImpactRadialVector).magnitude < 100)
+                if (impactPos.HasValue &&
+                    ((impactPos ?? Vector3d.zero ) - lastImpactRadialVector).magnitude < 100)
                 {
-
+                    Vector3d currentImpactRadialVector = (Vector3d)impactPos;
                     // very rough estimate: add reentry overshoot to target as tangential vector at target
                     Vector3d currentTargetRadialVector = mainBody.GetWorldSurfacePosition(core.target.targetLatitude, core.target.targetLongitude, 0) - mainBody.position;
                     Vector3 orbitNormal = orbit.SwappedOrbitNormal();
@@ -97,8 +97,8 @@ namespace MuMech
                     Vector3 orbitClosestToTarget = Vector3.ProjectOnPlane(currentTargetRadialVector, orbitNormal).normalized;
                     Vector3 targetForward = Vector3.Cross(orbitClosestToTarget, orbitNormal);
 
-                    currentTargetRadialVector -= core.landing.reentryTargetAhead * targetForward;
-                    Vector3d differenceTarget = currentTargetRadialVector - currentImpactRadialVector;
+                    orbitClosestToTarget -= core.landing.reentryTargetAhead * targetForward;
+                    Vector3d differenceTarget = orbitClosestToTarget - currentImpactRadialVector;
                     
                     //How far ahead the target is compared to impact, in degrees
                     float targetAheadAngle = Vector3.SignedAngle(orbitClosestToTarget, currentImpactRadialVector, orbitNormal); 
@@ -112,9 +112,6 @@ namespace MuMech
                     //Debug.Log(String.Format("Autoland: orbitClosestToTarget={0:F3} orbitNormal={1:F3} targetForward={2:F3} ", orbitClosestToTarget, orbit.SwappedOrbitNormal(), targetForward));
                     //Debug.Log(String.Format("Autoland: normalDiff={0:F1}, backwardDiff={1:F1}", normalDifference, backwardDifference));
 
-                    status = String.Format("Optimizing deorbit time based on trajectory prediction, shift by {0:F4} degree or {1:F0} seconds", targetAheadAngle, targetAheadAngle * orbit.period / 360f);
-                    //Debug.Log("Autoland: " + status);
-
                     if (Math.Abs(targetAheadAngle) < 0.5 && Math.Abs(forwardDifference) < deorbitprecision)
                     {
                         origDifference = forwardDifference;
@@ -125,18 +122,22 @@ namespace MuMech
                         //move Node
                         ManeuverNode plannedNode = vessel.patchedConicSolver.maneuverNodes[0];
                         double deorbitTime = plannedNode.UT;
+                        double adoptionRate = 1;
 
                         if (Math.Abs(targetAheadAngle) < 0.5) // for small changes use tangential calculation, otherwise angluar
                         {
-                            deorbitTime -= forwardDifference / vesselState.speedSurfaceHorizontal;
+                            deorbitTime -= adoptionRate * forwardDifference / vesselState.speedSurfaceHorizontal;
                         }
                         else
                         {
-                            deorbitTime -= targetAheadAngle * orbit.period / 360f;
+                            deorbitTime -= adoptionRate * targetAheadAngle * orbit.period / 360f;
                         }
 
                         if (deorbitTime < vesselState.time) deorbitTime += orbit.period;
                         if (deorbitTime > vesselState.time + 1.5 * orbit.period) deorbitTime -= orbit.period;
+
+                        status = String.Format("Optimizing deorbit time based on trajectory prediction, shift by {0:F4} degree, {1:F0} m equals {2:F1} seconds", targetAheadAngle, forwardDifference, deorbitTime - plannedNode.UT);
+                        Debug.Log("Autoland: " + status);
 
                         plannedNode.RemoveSelf();
                         vessel.PlaceManeuverNode(vessel.orbit, OrbitalManeuverCalculator.DeltaVToChangePeriapsis(orbit, deorbitTime, mainBody.Radius + core.landing.reentryTargetHeight), deorbitTime);
@@ -144,8 +145,8 @@ namespace MuMech
                         Trajectories.API.invalidateCalculation();
                     }
                 }
-                else if (currentImpactRadialVector != Vector3d.zero)
-                    lastImpactRadialVector = currentImpactRadialVector;
+                else if (impactPos.HasValue)
+                    lastImpactRadialVector = (Vector3d)impactPos;
 
                 return false;
             }
@@ -167,9 +168,9 @@ namespace MuMech
                     Vector3 orbitClosestToTarget = Vector3.ProjectOnPlane(currentTargetRadialVector, orbitNormal).normalized;
                     Vector3 targetForward = Vector3.Cross(orbitClosestToTarget, orbitNormal);
 
-                    currentTargetRadialVector -= core.landing.reentryTargetAhead * targetForward;
+                    orbitClosestToTarget -= core.landing.reentryTargetAhead * targetForward;
 
-                    Vector3d differenceTarget = currentTargetRadialVector - currentImpactRadialVector;
+                    Vector3d differenceTarget = orbitClosestToTarget - currentImpactRadialVector;
                     double forwardDifference = Vector3d.Dot(differenceTarget, targetForward);
 
                     analyzeData(upper, forwardDifference, currentAirAngle, +1d);
