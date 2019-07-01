@@ -181,11 +181,17 @@ namespace MuMech
 
 
         public Vector3d pureDragV;
-        [ValueInfoItem("Pure Drag", InfoItem.Category.Vessel, format = ValueInfoItem.SI, units = "m/s²")]
+        //DEBUG Traj
+        [ValueInfoItem("Traj Drag", InfoItem.Category.Vessel, format = ValueInfoItem.SI, units = "N")]
+        public Vector3d trajDragV;
+        [ValueInfoItem("Pure Drag", InfoItem.Category.Vessel, format = ValueInfoItem.SI, units = "N")]
         public double pureDrag;
 
         public Vector3d pureLiftV;
-        [ValueInfoItem("Pure Lift", InfoItem.Category.Vessel, format = ValueInfoItem.SI, units = "m/s²")]
+        //DEBUG Traj
+        [ValueInfoItem("Traj Lift", InfoItem.Category.Vessel, format = ValueInfoItem.SI, units = "N")]
+        public Vector3d trajLiftV;
+        [ValueInfoItem("Pure Lift", InfoItem.Category.Vessel, format = ValueInfoItem.SI, units = "N")]
         public double pureLift;
 
         // Drag is the force (pureDrag + PureLift) applied opposite of the surface vel
@@ -892,8 +898,8 @@ namespace MuMech
             torqueGimbal.Reset();
             torqueOthers.Reset();
 
-            pureDragV = Vector3d.zero;
-            pureLiftV = Vector3d.zero;
+            pureDragV = trajDragV = Vector3d.zero;
+            pureLiftV = trajLiftV = Vector3d.zero;
 
             if (isLoadedFAR)
             {
@@ -919,6 +925,7 @@ namespace MuMech
 
                 Vector3d partPureLift = Vector3.zero;
                 Vector3d partPureDrag = -p.dragVectorDir * p.dragScalar;
+                Vector3d partTrajLift = Vector3d.zero, partTrajDrag = Vector3d.zero;
 
                 if (!p.hasLiftModule)
                 {
@@ -959,6 +966,13 @@ namespace MuMech
                     {
                         partPureLift += ls.liftForce;
                         partPureDrag += ls.dragForce;
+                    }
+                    //traj debug
+                    Trajectories.TrajectoriesDebug td = pm as Trajectories.TrajectoriesDebug;
+                    if (td != null)
+                    {
+                        partTrajLift += td.Lift;
+                        partTrajDrag += td.Drag;
                     }
 
                     ModuleReactionWheel rw = pm as ModuleReactionWheel;
@@ -1073,6 +1087,12 @@ namespace MuMech
 
                 pureDragV += partPureDrag;
                 pureLiftV += partPureLift;
+                trajDragV += partTrajDrag;
+                trajLiftV += partTrajLift;
+              //  if ((partPureDrag - partTrajDrag).magnitude > 0.1)
+              //      Debug.Log("part drag difference: " + p.persistentId + " " + p.name + ", diff=" + (partPureDrag - partTrajDrag).magnitude);
+              //  if ((partPureLift - partTrajLift).magnitude > 1)
+              //      Debug.Log(String.Format("part lift difference: {0} {1} actual:{2:F3} calculated:{3:F3}", p.persistentId, p.name, partPureLift, partTrajLift));
 
                 Vector3d partAeroForce = partPureDrag + partPureLift;
 
@@ -1146,8 +1166,8 @@ namespace MuMech
             }
             else
             {
-                pureDragV = pureDragV / mass;
-                pureLiftV = pureLiftV / mass;
+                //pureDragV = pureDragV / mass; trajDragV = trajDragV / mass;
+                //pureLiftV = pureLiftV / mass; trajLiftV = trajLiftV / mass;
 
                 pureDrag = pureDragV.magnitude;
 

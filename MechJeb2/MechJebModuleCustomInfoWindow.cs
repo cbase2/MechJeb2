@@ -600,6 +600,7 @@ namespace MuMech
         public const string ANGLE = "ANGLE";
         public const string ANGLE_NS = "ANGLE_NS";
         public const string ANGLE_EW = "ANGLE_EW";
+        public const string V_LOCAL = "V_LOCAL";
         int siSigFigs; //only used with the "SI" format
         int siMaxPrecision; //only used with the "SI" format
         int timeDecimalPlaces; //only used with the "TIME" format
@@ -653,6 +654,7 @@ namespace MuMech
             else if (format == ANGLE_NS) return Coordinates.AngleToDMS(doubleValue) + " " + (doubleValue > 0 ? "N" : "S");
             else if (format == ANGLE_EW) return Coordinates.AngleToDMS(doubleValue) + " " + (doubleValue > 0 ? "E" : "W");
             else if (format == SI) return (MuUtils.ToSI(doubleValue, siMaxPrecision, siSigFigs) + units);
+            else if (format == V_LOCAL && value is Vector3) return FlightGlobals.ActiveVessel.transform.InverseTransformVector((Vector3)value).ToString("F1");
             else return doubleValue.ToString(format) + " " + units;
         }
 
