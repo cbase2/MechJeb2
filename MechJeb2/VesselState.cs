@@ -654,8 +654,9 @@ namespace MuMech
             speedOrbitHorizontal = (orbitalVelocity - (speedVertical * up)).magnitude;
 
             // Angle of Attack, angle between surface velocity and the ship-nose vector (KSP "up" vector) in the plane that has no ship-right/left in it
-            Vector3 srfProj = Vector3.ProjectOnPlane(surfaceVelocity.normalized, vessel.ReferenceTransform.right);
-            double tmpAoA = UtilMath.Rad2Deg * Math.Atan2(Vector3.Dot(srfProj.normalized, vessel.ReferenceTransform.forward), Vector3.Dot(srfProj.normalized, vessel.ReferenceTransform.up) );
+            Vector3 srfProj = Vector3.ProjectOnPlane(surfaceVelocity, vessel.ReferenceTransform.right).normalized;
+            //double tmpAoA = UtilMath.Rad2Deg * Math.Atan2(Vector3.Dot(srfProj.normalized, vessel.ReferenceTransform.forward), Vector3.Dot(srfProj.normalized, vessel.ReferenceTransform.up) );
+            double tmpAoA = UtilMath.Rad2Deg * Math.Acos(Mathf.Clamp(Vector3.Dot(srfProj, vessel.ReferenceTransform.up), -1f, 1f)) * Mathf.Sign(Vector3.Dot(srfProj, vessel.ReferenceTransform.forward));
             AoA.value = double.IsNaN(tmpAoA) || speedSurface.value < 0.01 ? 0 : tmpAoA;
 
             // Angle of Sideslip, angle between surface velocity and the ship-nose vector (KSP "up" vector) in the plane that has no ship-top/bottom in it (KSP "forward"/"back")
