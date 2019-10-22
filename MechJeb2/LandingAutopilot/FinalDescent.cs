@@ -9,9 +9,11 @@ namespace MuMech
         {
 
             private IDescentSpeedPolicy aggressivePolicy;
+            private int waitForChute = 0;
 
             public FinalDescent(MechJebCore core) : base(core)
             {
+                if (mainBody.atmosphere) waitForChute = 30;
             }
 
             public override AutopilotStep OnFixedUpdate()
@@ -43,7 +45,7 @@ namespace MuMech
                     return null;
                 }
 
-                // TODO perhaps we should pop the parachutes at this point, or at least consider it depending on the altitude.
+                if (waitForChute > 0) waitForChute--;
 
                 double minalt = Math.Min(vesselState.altitudeBottom, Math.Min(vesselState.altitudeASL, vesselState.altitudeTrue));
 
@@ -75,13 +77,19 @@ namespace MuMech
                     {
                         // rely on parachutes to get down to 200m
                         core.attitude.attitudeTo(Vector3d.back, AttitudeReference.SURFACE_VELOCITY, null);
-                        core.thrust.tmode = MechJebModuleThrustController.TMode.DIRECT;
-                        core.thrust.trans_spd_act = 0;
-                        foreach (var p in vesselState.parachutes)
+
+                        //assume we fall straight due to parachutes
+                        double maxSpeed = 0.9 * Math.Sqrt( 2d * vesselState.altitudeTrue * (vesselState.limitedMaxThrustAccel - mainBody.GeeASL * 9.81));
+                        if (waitForChute == 0 && (vesselState.TerminalVelocity() > maxSpeed) )
                         {
-                            if (p.deploymentState == ModuleParachute.deploymentStates.STOWED
-                                && p.deploymentSafeState == ModuleParachute.deploymentSafeStates.SAFE)
-                                    p.Deploy();
+                            Debug.Log(String.Format("Emergency break in final descent alt:{0} accel:{1} maxSpeed:{2} terminal v:{3}", vesselState.altitudeTrue, vesselState.limitedMaxThrustAccel, maxSpeed, vesselState.TerminalVelocity()));
+                            core.thrust.trans_spd_act = (float) maxSpeed;
+                            core.thrust.tmode = MechJebModuleThrustController.TMode.KEEP_SURFACE;
+                        }
+                        else
+                        {
+                            core.thrust.tmode = MechJebModuleThrustController.TMode.DIRECT;
+                            core.thrust.trans_spd_act = 0;
                         }
 
                     }

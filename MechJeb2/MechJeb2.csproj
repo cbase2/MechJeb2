@@ -87,7 +87,6 @@
     <Compile Include="GuiUtils.cs" />
     <Compile Include="InstallChecker.cs" />
     <Compile Include="LambertSolver.cs" />
-    <Compile Include="LandingAutopilot\AtmosphericBehaviour.cs" />
     <Compile Include="LandingAutopilot\AtmosphericCorrection.cs" />
     <Compile Include="LandingAutopilot\AtmosphericDeorbit.cs" />
     <Compile Include="LandingAutopilot\CoastToDeceleration.cs" />
@@ -236,6 +235,7 @@
     <Compile Include="ScriptsModule\MechJebModuleScriptActionsList.cs" />
     <Compile Include="ScriptsModule\MechJebModuleScriptCondition.cs" />
     <Compile Include="ToolbarWrapper.cs" />
+    <Compile Include="TrajectoriesConnector.cs" />
     <Compile Include="UnityToolbag\Dispatcher\Dispatcher.cs" />
     <Compile Include="UnityToolbag\Future\Future.cs" />
     <Compile Include="Vector6.cs" />

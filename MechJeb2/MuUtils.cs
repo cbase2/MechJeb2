@@ -79,12 +79,15 @@ namespace MuMech
         }
 
         //since there doesn't seem to be a Math.Clamp?
-        public static double Clamp(double x, double min, double max)
+        //extended version allows easy control flow change in case of clamped value
+        public static double Clamp(double x, double min, double max, out bool clamped)
         {
-            if (x < min) return min;
-            if (x > max) return max;
-            return x;
+            if (x < min) { clamped = true; return min; }
+            if (x > max) { clamped = true; return max; }
+            clamped = false;  return x;
         }
+        public static double Clamp(double x, double min, double max)
+        { return Clamp(x, min, max, out _); }
 
         //keeps angles in the range 0 to 360
         public static double ClampDegrees360(double angle)
