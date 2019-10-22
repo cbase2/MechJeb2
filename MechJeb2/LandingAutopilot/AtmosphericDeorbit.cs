@@ -12,27 +12,18 @@ namespace MuMech
             enum Phase { init, plan, measure, execute};
             Phase phase = Phase.init;
 
-            enum Measurement { calc, waitCalc, refine, waitRefine, done }
-
-            class MeasureData
-            {
-                public Measurement state;
-                public double angle;
-                public double difference;
-            }
-
-            MeasureData lower = new MeasureData();
-            MeasureData upper = new MeasureData();
-
             Vector3d lastImpactRadialVector = Vector3d.zero;
-            double origAirAngle;
-            double origDifference;
+            TrajectoriesConnector.TargetInfo targetInfo;
 
-            bool inverseAngles = false;
+            double origAirAngle, minAngle, maxAngle;
+            double origDifference, minDifference, maxDifference;
 
             public AtmosphericDeorbit(MechJebCore core) : base(core)
             {
                 doAfterExecution = new AtmosphericCorrection(core);
+
+                targetInfo = new TrajectoriesConnector.TargetInfo(core.target)
+                                { targetOffset = core.landing.reentryTargetAhead };
             }
 
             // calculate deorbit node and if node is acceptable base class will excute it
@@ -49,29 +40,29 @@ namespace MuMech
                 switch (phase)
                 { 
                     case Phase.init:
-                        core.attitude.attitudeTo(Quaternion.identity, AttitudeReference.SURFACE_HORIZONTAL, this);
+                        //core.attitude.attitudeTo(Quaternion.identity, AttitudeReference.SURFACE_HORIZONTAL, this);
                         vessel.RemoveAllManeuverNodes();
                         vessel.PlaceManeuverNode(vessel.orbit, OrbitalManeuverCalculator.DeltaVToChangePeriapsis(orbit, vesselState.time, mainBody.Radius + core.landing.reentryTargetHeight), vesselState.time);
-                        Trajectories.API.SetTarget(core.target.targetLatitude, core.target.targetLongitude);
+                        TrajectoriesConnector.API.SetTarget(core.target.targetLatitude, core.target.targetLongitude);
                         status = "Calculating deorbit trajectory";
                         phase = Phase.plan;
                         break;
                     case Phase.plan:
-                        if (!optimizeNode())
-                            break;
-                        else
+                        targetInfo.update();
+                        if (targetInfo.isValid && optimizeNode())
                         {
-                            phase = Phase.measure;
-                            core.landing.origAngle = origAirAngle = (double) Trajectories.API.AirAngle; // we are only optimized with valid trajectory
-                            lower.state = Measurement.calc;
-                            Trajectories.API.AirAngle = lower.angle = origAirAngle - 5;
-                            upper.state = Measurement.waitCalc;
-                            upper.angle = origAirAngle;
-                            goto case Phase.measure;
-                        } 
+                            //minDifference = maxDifference = -origDifference;
+                            //minAngle = maxAngle = origAirAngle = TrajectoriesConnector.AirAngle; // we are only optimized with valid trajectory
+                            //TrajectoriesConnector.AirAngle = origAirAngle - 15;
+                            //phase = Phase.measure;
+                            phase = Phase.execute; 
+                        }
+                        break;
                     case Phase.measure:
+                        status = "Analyzing impact with different angles";
+                        targetInfo.update();
                         // we have deorbit node and drive will turn to it, but meanwhile measure how changing AirAngle affects target difference
-                        if (measureAngle())
+                        if (targetInfo.isValid && measureAngle())
                             phase = Phase.execute; //we are done measuring
                         break;
                     case Phase.execute:
@@ -83,174 +74,85 @@ namespace MuMech
 
             bool optimizeNode()
             {
-                // primary calculations come from trajectories
-                Vector3d? impactPos = Trajectories.API.GetImpactPosition(); // relativ Vector to impact position on surface at current time
 
-                if (impactPos.HasValue &&
-                    ((impactPos ?? Vector3d.zero ) - lastImpactRadialVector).magnitude < 100)
+                //Debug.Log(String.Format("Autoland: currentImpactRadialVector={0} currentTargetRadialVector={1} differenceTarget={2}", targetInfo.currentImpactRadialVector, targetInfo.currentTargetRadialVector, targetInfo.differenceTarget));
+                //Debug.Log(String.Format("Autoland: orbitClosestToTarget={0} orbitNormal={1} targetForward={2} ", targetInfo.orbitClosestToTarget, orbit.SwappedOrbitNormal(), targetForward.ToString("F3")));
+                //Debug.Log(String.Format("Autoland: normalDiff={0:F1}, backwardDiff={1:F1}", targetInfo.normalDifference, targetInfo.backwardDifference));
+
+                if (Math.Abs(targetInfo.targetAheadAngle) < 0.5 && Math.Abs(targetInfo.backwardDifference) < deorbitprecision)
                 {
-                    Vector3d currentImpactRadialVector = (Vector3d)impactPos;
-                    // very rough estimate: add reentry overshoot to target as tangential vector at target
-                    Vector3d currentTargetRadialVector = mainBody.GetWorldSurfacePosition(core.target.targetLatitude, core.target.targetLongitude, 0) - mainBody.position;
-                    Vector3 orbitNormal = orbit.SwappedOrbitNormal();
-                    
-                    Vector3 orbitClosestToTarget = Vector3.ProjectOnPlane(currentTargetRadialVector, orbitNormal);
-                    Vector3 targetForward = Vector3.Cross(orbitClosestToTarget.normalized, orbitNormal);
+                    origDifference = targetInfo.backwardDifference;
+                    return true; // execute plannedNode
+                }
+                else
+                {
+                    //move Node
+                    ManeuverNode plannedNode = vessel.patchedConicSolver.maneuverNodes[0];
+                    double deorbitTime = plannedNode.UT;
+                    double timedelta;
 
-                    orbitClosestToTarget -= core.landing.reentryTargetAhead * targetForward;
-                    Vector3d differenceTarget = orbitClosestToTarget - currentImpactRadialVector;
-                    
-                    //How far ahead the target is compared to impact, in degrees
-                    float targetAheadAngle = Vector3.SignedAngle(orbitClosestToTarget, currentImpactRadialVector, orbitNormal); 
-
-                    //calculate directional derivation at target location for fine tuning
-                    double normalDifference = Vector3d.Dot(differenceTarget, orbitNormal);
-
-                    double forwardDifference = Vector3d.Dot(differenceTarget, targetForward); /* = overshoot < 0, too short > 0 */
-
-                    Debug.Log(String.Format("Autoland: currentImpactRadialVector={0} currentTargetRadialVector={1} differenceTarget={2}", currentImpactRadialVector, currentTargetRadialVector, differenceTarget));
-                    Debug.Log(String.Format("Autoland: orbitClosestToTarget={0} orbitNormal={1} targetForward={2} ", orbitClosestToTarget, orbit.SwappedOrbitNormal(), targetForward.ToString("F3")));
-                    Debug.Log(String.Format("Autoland: normalDiff={0:F1}, backwardDiff={1:F1}", normalDifference, forwardDifference));
-
-                    if (Math.Abs(targetAheadAngle) < 0.5 && Math.Abs(forwardDifference) < deorbitprecision)
+                    if (Math.Abs(targetInfo.targetAheadAngle) < 0.5) // for small changes use tangential calculation, otherwise angluar
                     {
-                        origDifference = forwardDifference;
-                        return true; // execute plannedNode
+                        timedelta = targetInfo.backwardDifference / vesselState.speedSurfaceHorizontal;
                     }
                     else
                     {
-                        //move Node
-                        ManeuverNode plannedNode = vessel.patchedConicSolver.maneuverNodes[0];
-                        double deorbitTime = plannedNode.UT;
-
-                        if (Math.Abs(targetAheadAngle) < 0.5) // for small changes use tangential calculation, otherwise angluar
-                        {
-                            deorbitTime -= forwardDifference / vesselState.speedSurfaceHorizontal;
-                        }
-                        else
-                        {
-                            deorbitTime -= targetAheadAngle * orbit.period / 360f;
-                        }
-
-                        if (deorbitTime < vesselState.time) deorbitTime += orbit.period;
-                        if (deorbitTime > vesselState.time + 1.5 * orbit.period) deorbitTime -= orbit.period;
-
-                        status = String.Format("Optimizing deorbit time based on trajectory prediction, shift by {0:F4} degree, {1:F0} m equals {2:F1} seconds", targetAheadAngle, forwardDifference, deorbitTime - plannedNode.UT);
-                        Debug.Log("Autoland: " + status);
-
-                        plannedNode.RemoveSelf();
-                        vessel.PlaceManeuverNode(vessel.orbit, OrbitalManeuverCalculator.DeltaVToChangePeriapsis(orbit, deorbitTime, mainBody.Radius + core.landing.reentryTargetHeight), deorbitTime);
-                        lastImpactRadialVector = Vector3d.zero;
-                        Trajectories.API.invalidateCalculation();
+                        timedelta = targetInfo.targetAheadAngle * orbit.period / 360f;
                     }
+
+                    if (timedelta < 0) // asymetric to avoid jumping between two points without improvement. Observed with inclined trajectory.
+                        deorbitTime -= timedelta;
+                    else
+                        deorbitTime -= 0.5 * timedelta;
+
+                    if (deorbitTime < vesselState.time) deorbitTime += orbit.period;
+                    if (deorbitTime > vesselState.time + 1.5 * orbit.period) deorbitTime -= orbit.period;
+
+                    status = String.Format("Optimizing deorbit time based on trajectory prediction, shift by {0:F4} degree, {1:F0} m equals {2:F1} seconds", targetInfo.targetAheadAngle, targetInfo.backwardDifference, deorbitTime - plannedNode.UT);
+                    Debug.Log("Autoland: " + status);
+
+                    plannedNode.RemoveSelf();
+                    vessel.PlaceManeuverNode(vessel.orbit, OrbitalManeuverCalculator.DeltaVToChangePeriapsis(orbit, deorbitTime, mainBody.Radius + core.landing.reentryTargetHeight), deorbitTime);
+                    TrajectoriesConnector.API.invalidateCalculation();
                 }
-                else if (impactPos.HasValue)
-                    lastImpactRadialVector = (Vector3d)impactPos;
 
                 return false;
             }
 
             bool measureAngle()
             {
+                double currentAirAngle = TrajectoriesConnector.AoA;
 
-                // primary calculations come from trajectories
-                Vector3d currentImpactRadialVector = Trajectories.API.GetImpactPosition() ?? Vector3d.zero; // relativ Vector to impact position on surface at current time
-
-                if (currentImpactRadialVector != Vector3d.zero &&
-                    (currentImpactRadialVector - lastImpactRadialVector).magnitude < 100)
+                if (targetInfo.backwardDifference < minDifference)
                 {
-                    double currentAirAngle = (double) Trajectories.API.AirAngle;
-                    Vector3d currentTargetRadialVector = mainBody.GetWorldSurfacePosition(core.target.targetLatitude, core.target.targetLongitude, 0) - mainBody.position;
-
-                    Vector3 orbitNormal = orbit.SwappedOrbitNormal();
-                     
-                    Vector3 orbitClosestToTarget = Vector3.ProjectOnPlane(currentTargetRadialVector, orbitNormal).normalized;
-                    Vector3 targetForward = Vector3.Cross(orbitClosestToTarget, orbitNormal);
-
-                    orbitClosestToTarget -= core.landing.reentryTargetAhead * targetForward;
-
-                    Vector3d differenceTarget = orbitClosestToTarget - currentImpactRadialVector;
-                    double forwardDifference = Vector3d.Dot(differenceTarget, targetForward);
-
-                    analyzeData(upper, forwardDifference, currentAirAngle, +1d);
-                    analyzeData(lower, forwardDifference, currentAirAngle, -1d);
-
-                    // if both are done, 
-                    if (upper.state == Measurement.done && lower.state == Measurement.done)
-                    {
-                        core.landing.minAngle = lower.angle;
-                        core.landing.maxAngle = upper.angle;
-                        double distance = (currentTargetRadialVector- vesselState.orbitalPosition).magnitude;
-                        core.landing.factor = distance * (upper.angle - lower.angle) / (upper.difference - lower.difference) ;
-                        Trajectories.API.AirAngle = origAirAngle;
-                        Debug.Log(String.Format("Done analyzing vessel aerodynamic, approach angles =[{0:F1},{1:F1}], factor = {2:F4}", lower.angle, upper.angle, core.landing.factor));
-                        return true;
-                    }
-                        
-                    lastImpactRadialVector = Vector3d.zero;
-                    Trajectories.API.invalidateCalculation();
+                    minDifference = targetInfo.backwardDifference;
+                    minAngle = currentAirAngle;
                 }
-                else if (currentImpactRadialVector != Vector3d.zero)
-                    lastImpactRadialVector = currentImpactRadialVector;
+                else if (targetInfo.backwardDifference > maxDifference)
+                {
+                    maxDifference = targetInfo.backwardDifference;
+                    maxAngle = currentAirAngle;
+                }
+
+                if (currentAirAngle >= origAirAngle + 15)
+                {
+                    //min/maxAngle are named here as they are associated to min and max difference
+                    // next step needs them proper ordered for Clamp
+                    // factor is negative if we need to decrease angle to increase backward difference
+                    core.landing.minAngle = Math.Min(minAngle, maxAngle);
+                    core.landing.maxAngle = Math.Max(minAngle, maxAngle);
+                    core.landing.factor = (maxAngle-minAngle)/(maxDifference - minDifference);
+                    TrajectoriesConnector.AoA = origAirAngle;
+                    Debug.Log(String.Format("Done analyzing vessel aerodynamic, approach angles =[{0:F1},{1:F1}] backward diff= [{3:F0},{4:F0}] difference gives factor = {2:G4}", minAngle, maxAngle, core.landing.factor, minDifference, maxDifference));
+                    return true;
+                }
+                else
+                {
+                    TrajectoriesConnector.AoA = currentAirAngle + 1;
+                }
 
                 return false;
             }
-
-            void analyzeData(MeasureData data, double newDiff, double curAngle, double sign)
-            {
-                Debug.Log(String.Format("Analyze Measurement: {0:F0}° yields {1:F0} diff in {2}, prev={3:F0}° with {4:F0}", curAngle, newDiff, data.state, data.angle, data.difference));
-                switch (data.state)
-                {
-                    case Measurement.calc:
-
-                        if (sign * (data.difference - newDiff) > 0)
-                        {
-                            data.difference = newDiff;
-                            data.angle = curAngle;
-                            data.state = Measurement.waitCalc;
-                        }
-                        else
-                        {
-                            data.state = Measurement.waitRefine;
-                        }
-                        break;
-                    case Measurement.refine:
-                        if (sign * (data.difference - newDiff) > 0)
-                        {
-                            data.difference = newDiff;
-                            data.angle = curAngle;
-                            data.state = Measurement.waitRefine;
-                        }
-                        else
-                        {
-                            data.state = Measurement.done;
-                        }
-                        break;
-                    case Measurement.waitCalc:
-                        if (data.angle <= origAirAngle + 20)
-                        {
-                            data.state = Measurement.calc;
-                            Trajectories.API.AirAngle = data.angle += 5 * sign;
-                        }
-                        else
-                        {
-                            data.state = Measurement.done;
-                        }
-                        break;
-                    case Measurement.waitRefine:
-                        if (data.angle <= origAirAngle + 20)
-                        {
-                            data.state = Measurement.refine;
-                            Trajectories.API.AirAngle = data.angle += sign;
-                        }
-                        else
-                        {
-                            data.state = Measurement.done;
-                        }
-                        break;
-                }
-            }
-
         }
     }
 }

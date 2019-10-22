@@ -654,10 +654,15 @@ namespace MuMech
             speedOrbitHorizontal = (orbitalVelocity - (speedVertical * up)).magnitude;
 
             // Angle of Attack, angle between surface velocity and the ship-nose vector (KSP "up" vector) in the plane that has no ship-right/left in it
-            Vector3 srfProj = Vector3.ProjectOnPlane(surfaceVelocity, vessel.ReferenceTransform.right).normalized;
+            Vector3 srfProj = Vector3.ProjectOnPlane(surfaceVelocity, vessel.ReferenceTransform.right);
             //double tmpAoA = UtilMath.Rad2Deg * Math.Atan2(Vector3.Dot(srfProj.normalized, vessel.ReferenceTransform.forward), Vector3.Dot(srfProj.normalized, vessel.ReferenceTransform.up) );
-            double tmpAoA = UtilMath.Rad2Deg * Math.Acos(Mathf.Clamp(Vector3.Dot(srfProj, vessel.ReferenceTransform.up), -1f, 1f)) * Mathf.Sign(Vector3.Dot(srfProj, vessel.ReferenceTransform.forward));
-            AoA.value = double.IsNaN(tmpAoA) || speedSurface.value < 0.01 ? 0 : tmpAoA;
+            if (srfProj.magnitude > 0.1)
+            {
+                srfProj.Normalize();
+                AoA.value = UtilMath.Rad2Deg * Math.Acos(Mathf.Clamp(Vector3.Dot(srfProj, vessel.ReferenceTransform.up), -1f, 1f)) * Mathf.Sign(Vector3.Dot(srfProj, vessel.ReferenceTransform.forward));
+            }
+            else
+                AoA.value = 0;
 
             // Angle of Sideslip, angle between surface velocity and the ship-nose vector (KSP "up" vector) in the plane that has no ship-top/bottom in it (KSP "forward"/"back")
             srfProj = Vector3.ProjectOnPlane(surfaceVelocity.normalized, vessel.ReferenceTransform.forward);
@@ -813,7 +818,7 @@ namespace MuMech
 
                             Vector3d thrustDirection = rcs.useZaxis ? -t.forward : -t.up;
 
-                            float power = rcs.thrusterPower;
+                            float power = rcs.thrusterPower * rcs.thrustPercentage / 100f;
 
                             if (FlightInputHandler.fetch.precisionMode)
                             {
