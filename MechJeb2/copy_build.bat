@@ -8,7 +8,7 @@ SET TargetName=%3
 
 echo %TargetPath% %TargetDir% %TargetName%
 
-IF EXIST %PDB2MDB% ( 
+IF EXIST "%PDB2MDB%" ( 
 	IF NOT EXIST "%MONO%" (
 		echo Expected "%MONO%" to point to mono.exe
 		exit 0
