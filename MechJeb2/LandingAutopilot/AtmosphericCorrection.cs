@@ -257,7 +257,7 @@ namespace MuMech
 
                 }
                 // turn plannedOrientation towards Reference(=velocity), this should reduce drag and maybe we get more distance covered
-                float courseDiffRate = (float)(30.0 * -targetInfo.normalDifference / targetInfo.distanceTarget.magnitude); //FIXME: hardcoded factor for rolling, maybe better scaling is somewhere in airplane code
+                float courseDiffRate = (float)(100f * targetInfo.normalDifference / targetInfo.forwardDistance); //FIXME: hardcoded factor for rolling, maybe better scaling is somewhere in airplane code
 
                 if (Mathf.Abs(courseDiffRate) < 0.0005) courseDiffRate = 0; //neglect very small differences
                 if (Mathf.Abs(courseDiffRate) > 0)
