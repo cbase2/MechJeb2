@@ -98,7 +98,15 @@ namespace MuMech
 
                         if (targetOffset != 0)
                         {
-                            orbitClosestToTarget += (targetOffset * targetForward);
+                            if (targetOffset < 0.5 * UtilMath.Deg2Rad * mainBody.Radius)
+                            {
+                                orbitClosestToTarget += (targetOffset * targetForward); // small distance
+                            }
+                            else
+                            {
+                                //long distance: rotate target by radiant distance
+                                orbitClosestToTarget = Quaternion.AngleAxis((float)(UtilMath.Rad2Deg * targetOffset / mainBody.Radius), orbitNormal) * orbitClosestToTarget;
+                            }
                         }
                         differenceTarget = orbitClosestToTarget - currentImpactRadialVector;
 
