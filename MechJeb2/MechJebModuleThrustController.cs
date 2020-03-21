@@ -62,12 +62,12 @@ namespace MuMech
         [Persistent(pass = (int)Pass.Global)]
         public bool limitToPreventOverheats = false;
 
-        [GeneralInfoItem("Prevent engine overheats", InfoItem.Category.Thrust)]
+        [GeneralInfoItem("Prevent vessel overheats", InfoItem.Category.Thrust)]
         public void LimitToPreventOverheatsInfoItem()
         {
             GUIStyle s = new GUIStyle(GUI.skin.toggle);
             if (limiter == LimitMode.Temperature) s.onHover.textColor = s.onNormal.textColor = Color.green;
-            limitToPreventOverheats = GUILayout.Toggle(limitToPreventOverheats, "Prevent engine overheats", s);
+            limitToPreventOverheats = GUILayout.Toggle(limitToPreventOverheats, "Prevent vessel overheats", s);
         }
 
         [ToggleInfoItem("Smooth throttle", InfoItem.Category.Thrust)]
@@ -644,12 +644,12 @@ namespace MuMech
         //a throttle setting that throttles down if something is close to overheating
         double TemperatureSafetyThrottle()
         {
-            double maxTempRatio = vessel.parts.Max(p => p.temperature / p.maxTemp);
+            double maxTempRatio = vessel.parts.Max(p => Math.Max(p.temperature / p.maxTemp, p.skinTemperature / p.skinMaxTemp) );
 
             //reduce throttle as the max temp. ratio approaches 1 within the safety margin
-            const double tempSafetyMargin = 0.05f;
-            if (maxTempRatio < 1 - tempSafetyMargin) return 1.0F;
-            else return (1 - maxTempRatio) / tempSafetyMargin;
+            const double tempSafetyMargin = 0.05;
+            if (maxTempRatio < 1.0 - tempSafetyMargin) return 1.0;
+            else return (1.0 - maxTempRatio) / tempSafetyMargin;
         }
 
         float SmoothThrottle(float mainThrottle)
