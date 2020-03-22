@@ -647,9 +647,9 @@ namespace MuMech
             double maxTempRatio = vessel.parts.Max(p => Math.Max(p.temperature / p.maxTemp, p.skinTemperature / p.skinMaxTemp) );
 
             //reduce throttle as the max temp. ratio approaches 1 within the safety margin
-            const double tempSafetyMargin = 0.05;
-            if (maxTempRatio < 1.0 - tempSafetyMargin) return 1.0;
-            else return (1.0 - maxTempRatio) / tempSafetyMargin;
+            const double tempSafetyMargin = 0.03;
+            if (maxTempRatio < 1.0 - 2.0 * tempSafetyMargin) return 1.0;
+            else return (1.0 - tempSafetyMargin - maxTempRatio) / tempSafetyMargin;
         }
 
         float SmoothThrottle(float mainThrottle)
