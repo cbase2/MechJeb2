@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace MuMech
 {
-    public enum ascentType { CLASSIC, GRAVITYTURN, PVG };
+    public enum ascentType { CLASSIC, GRAVITYTURN, BREATHING_GT, PVG };
 
     //Todo: -reimplement measurement of LPA
     //      -Figure out exactly how throttle-limiting should work and interact
@@ -379,7 +379,7 @@ namespace MuMech
         // wiring for switching the different ascent types
         //////////////////////////////////////////////////
 
-        public string[] ascentPathList = { "Classic Ascent Profile", "Stock-style GravityTurn™", "Primer Vector Guidance (RSS/RO)" };
+        public string[] ascentPathList = { "Classic Ascent Profile", "Stock-style GravityTurn™", "Air breathing GravityTurn™", "Primer Vector Guidance (RSS/RO)" };
 
         public MechJebModuleAscentBase ascentPath;
         public MechJebModuleAscentMenuBase ascentMenu;
@@ -409,6 +409,8 @@ namespace MuMech
                     return core.GetComputerModule<MechJebModuleAscentClassic>();
                 case ascentType.GRAVITYTURN:
                     return core.GetComputerModule<MechJebModuleAscentGT>();
+                case ascentType.BREATHING_GT:
+                    return core.GetComputerModule<MechJebModuleAscentBreathingGT>();
                 case ascentType.PVG:
                     return core.GetComputerModule<MechJebModuleAscentPVG>();
             }

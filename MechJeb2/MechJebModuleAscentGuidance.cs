@@ -22,6 +22,7 @@ namespace MuMech
         public MechJebModuleAscentAutopilot autopilot { get { return core.GetComputerModule<MechJebModuleAscentAutopilot>(); } }
         public MechJebModuleAscentPVG pvgascent { get { return core.GetComputerModule<MechJebModuleAscentPVG>(); } }
         public MechJebModuleAscentGT gtascent { get { return core.GetComputerModule<MechJebModuleAscentGT>(); } }
+        public MechJebModuleAscentBreathingGT bgtascent { get { return core.GetComputerModule<MechJebModuleAscentBreathingGT>(); } }
         private MechJebModuleStageStats stats { get { return core.GetComputerModule<MechJebModuleStageStats>(); } }
         private FuelFlowSimulation.Stats[] atmoStats { get { return stats.atmoStats; } }
 
@@ -129,6 +130,17 @@ namespace MuMech
                         autopilot.showSettings = !autopilot.showSettings;
                     GUILayout.EndHorizontal();
                 }
+                else if (ascentPathIdx == ascentType.BREATHING_GT)
+                {
+                    GUILayout.BeginHorizontal(); // EditorStyles.toolbar);
+                    if (GUILayout.Button(Localizer.Format("#MechJeb_Ascent_button8"), autopilot.showTargeting ? btActive : btNormal, GUILayout.ExpandWidth(true)))//TARG
+                        autopilot.showTargeting = !autopilot.showTargeting;
+                    if (GUILayout.Button(Localizer.Format("#MechJeb_Ascent_button9"), autopilot.showGuidanceSettings ? btActive : btNormal, GUILayout.ExpandWidth(true)))//GUID
+                        autopilot.showGuidanceSettings = !autopilot.showGuidanceSettings;
+                    if (GUILayout.Button(Localizer.Format("#MechJeb_Ascent_button10"), autopilot.showSettings ? btActive : btNormal, GUILayout.ExpandWidth(true)))//OPTS
+                        autopilot.showSettings = !autopilot.showSettings;
+                    GUILayout.EndHorizontal();
+                }
                 else if (ascentPathIdx == ascentType.CLASSIC)
                 {
                     GUILayout.BeginHorizontal(); // EditorStyles.toolbar);
@@ -192,6 +204,18 @@ namespace MuMech
                         GuiUtils.SimpleTextBox(Localizer.Format("#MechJeb_Ascent_label10"), gtascent.turnStartPitch, "deg");//Turn start pitch:
                         GuiUtils.SimpleTextBox(Localizer.Format("#MechJeb_Ascent_label11"), gtascent.intermediateAltitude, "km");//Intermediate altitude:
                         GuiUtils.SimpleTextBox(Localizer.Format("#MechJeb_Ascent_label12"), gtascent.holdAPTime, "s");//Hold AP Time:
+
+                        GUILayout.EndVertical();
+                    }
+                    else if (ascentPathIdx == ascentType.BREATHING_GT)
+                    {
+                        GUILayout.BeginVertical();
+
+                        //GuiUtils.SimpleTextBox(Localizer.Format("#MechJeb_Ascent_label8"), bgtascent.turnStartAltitude, "km");//Turn start altitude:
+                        GuiUtils.SimpleTextBox(Localizer.Format("#MechJeb_Ascent_label9"), bgtascent.turnStartVelocity, "m/s");//Turn start velocity:
+                        GuiUtils.SimpleTextBox(Localizer.Format("#MechJeb_Ascent_label10"), bgtascent.turnStartPitch, "deg");//Turn start pitch:
+                        GuiUtils.SimpleTextBox(Localizer.Format("speed for breathing mode:"), bgtascent.startBreathingSpeed, "m/s");//speed for breathing mode:
+                        GuiUtils.SimpleTextBox(Localizer.Format("TWR to throttle other:"), bgtascent.minTWRthrottle, "s");//TWR to throttle other:
 
                         GUILayout.EndVertical();
                     }

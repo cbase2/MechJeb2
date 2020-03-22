@@ -151,6 +151,7 @@
     <Compile Include="MechJebModuleAscentAutopilot.cs" />
     <Compile Include="MechJebModuleAscentClassic.cs" />
     <Compile Include="MechJebModuleAscentClassicMenu.cs" />
+    <Compile Include="MechJebModuleAscentBreathingGT.cs" />
     <Compile Include="MechJebModuleAscentGT.cs" />
     <Compile Include="MechJebModuleAscentGuidance.cs" />
     <Compile Include="MechJebModuleAscentNavBall.cs" />
