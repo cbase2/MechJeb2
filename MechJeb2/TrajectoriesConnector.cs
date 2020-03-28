@@ -13,6 +13,8 @@ namespace MuMech
         {
             public static Vector3? GetImpactPosition() { return Trajectories.API.GetImpactPosition(); }
 
+            public static double? GetTimeTillImpact() { return Trajectories.API.GetTimeTillImpact(); }
+
             public static bool isBelowEntry() { return Trajectories.API.isBelowEntry(); }
 
             public static bool isTransitionAlt() { return Trajectories.API.isTransitionAlt(); }
@@ -59,10 +61,12 @@ namespace MuMech
 
             Vector3d currentImpactRadialVector;
             Vector3d lastImpactRadialVector;
-            Vector3d currentTargetRadialVector;
+            Vector3d currentTargetRadialVector;            
+            double timeTillImpact;
 
             public Vector3d CurrentTargetRadialVector { get { update(); return currentTargetRadialVector; } }
             public Vector3d CurrentImpactRadialVector { get { update(); return currentImpactRadialVector; } }
+            public double TimeTillImpact { get { update(); return timeTillImpact; } }
 
             Vector3 orbitNormal;
             Vector3 orbitClosestToTarget, orbitClosestToImpact;
@@ -87,6 +91,8 @@ namespace MuMech
                     {
                         lastImpactRadialVector = currentImpactRadialVector;
                         currentImpactRadialVector = impactPos.Value;
+                        timeTillImpact = API.GetTimeTillImpact().Value;
+
                         isValid = (lastImpactRadialVector - currentImpactRadialVector).magnitude < 100;
 
                         currentTargetRadialVector = mainBody.GetWorldSurfacePosition(target.targetLatitude, target.targetLongitude, 0) - mainBody.position;
@@ -116,7 +122,7 @@ namespace MuMech
                         distanceTarget = currentTargetRadialVector - vesselState.orbitalPosition;
                         distanceImpact = currentImpactRadialVector - vesselState.orbitalPosition;
                         //calculate sideway derivation at target location, which means we have to rescale if current impact is earlier or later
-                        normalDifference = (Vector3d.Dot(differenceTarget, orbitNormal) * distanceTarget.magnitude / distanceImpact.magnitude);
+                        normalDifference = (Vector3d.Dot(currentTargetRadialVector-orbitClosestToImpact, orbitNormal) * distanceTarget.magnitude / distanceImpact.magnitude);
                         backwardDifference = -Vector3d.Dot(differenceTarget, targetForward); /* = overshoot >0, too short <0 */
                         forwardDistance = Vector3d.Dot(distanceTarget, targetForward); 
                     }

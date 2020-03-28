@@ -226,7 +226,7 @@ namespace MuMech
         {
             vesselAverageDrag = VesselAverageDrag();
             base.OnFixedUpdate();
-            DeployParachutes();
+            //DeployParachutes(); Done in AtmosphericCorrection now
         }
 
         public override void OnModuleEnabled()

@@ -7,7 +7,7 @@ namespace MuMech
     {
         public class AtmosphericDeorbit : NodeExecution
         {
-            public static float deorbitprecision = 100f;
+            public static float deorbitprecision = 500f;
             
             enum Phase { init, plan, measure, execute};
             Phase phase = Phase.init;

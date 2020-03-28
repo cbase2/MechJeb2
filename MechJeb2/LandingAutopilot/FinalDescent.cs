@@ -10,10 +10,13 @@ namespace MuMech
 
             private IDescentSpeedPolicy aggressivePolicy;
             private int waitForChute = 0;
+            private bool useChute = false;
 
             public FinalDescent(MechJebCore core) : base(core)
             {
-                if (mainBody.atmosphere) waitForChute = 30;
+                useChute = mainBody.atmosphere && core.landing.deployChutes && vesselState.parachutes.Count > 0;
+                if (useChute)
+                    waitForChute = 30;
             }
 
             public override AutopilotStep OnFixedUpdate()
@@ -73,10 +76,14 @@ namespace MuMech
                         core.thrust.tmode = MechJebModuleThrustController.TMode.DIRECT;
                         core.thrust.trans_spd_act = 0;
                     }
-                    else if (mainBody.atmosphere)
+                    else if (useChute)
                     {
                         // rely on parachutes to get down to 200m
-                        core.attitude.attitudeTo(Vector3d.back, AttitudeReference.SURFACE_VELOCITY, null);
+                        // always point up towards target, so any lift providing surface will get us closer
+                        Vector3d diff = core.target.GetPositionTargetPosition()- core.landing.LandingSite;
+                        core.attitude.attitudeTo(Quaternion.LookRotation(-vesselState.surfaceVelocity, diff), AttitudeReference.INERTIAL, null);
+
+                        Debug.Log(String.Format("Diff to target: {0:F2} ", (Vector3) diff));
 
                         //assume we fall straight due to parachutes
                         double maxSpeed = 0.9 * Math.Sqrt( 2d * vesselState.altitudeTrue * (vesselState.limitedMaxThrustAccel - mainBody.GeeASL * 9.81));
