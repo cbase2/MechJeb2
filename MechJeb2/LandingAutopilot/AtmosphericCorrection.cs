@@ -217,11 +217,13 @@ namespace MuMech
                         }
                     }
                 }
-                
-                
+
+                float courseDiffRate=0;
                 // turn plannedOrientation towards Reference(=velocity), this should reduce drag and maybe we get more distance covered
-                float courseDiffRate = Mathf.Asin((float) (2.0 * targetInfo.normalDifference / targetInfo.distanceTarget.magnitude 
+                if (vesselState.lift > 1)
+                    courseDiffRate = Mathf.Asin((float) (2.0 * targetInfo.normalDifference / targetInfo.distanceTarget.magnitude 
                                  * vesselState.mass * vesselState.speedSurface /(targetInfo.TimeTillImpact *vesselState.lift )) );
+
                 logs += String.Format(", normalDiff: {0:F0}, time: {1:F0}s, rollAngle={2:F1}",targetInfo.normalDifference, targetInfo.TimeTillImpact, courseDiffRate);
                 if (Mathf.Abs(courseDiffRate) < 0.0005 || targetInfo.normalDifference < 50 ) courseDiffRate = 0; //neglect very small differences
                 if (Mathf.Abs(courseDiffRate) > 0 && TrajectoriesConnector.API.isBelowEntry())

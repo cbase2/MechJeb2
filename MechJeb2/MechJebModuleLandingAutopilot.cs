@@ -24,8 +24,6 @@ namespace MuMech
         public bool rcsAdjustment = true;
         [Persistent(pass = (int)(Pass.Local | Pass.Type | Pass.Global))]
         public EditableInt reentryTargetHeight = 27000;
-        [Persistent(pass = (int)(Pass.Local | Pass.Type | Pass.Global))]
-        public EditableInt reentryTargetAhead = 40000;
 
         public double origAngle, minAngle, maxAngle, factor;
 

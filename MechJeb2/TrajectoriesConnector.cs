@@ -48,7 +48,6 @@ namespace MuMech
             CelestialBody mainBody;
             MechJebModuleTargetController target;
             VesselState vesselState;
-            public int targetOffset = 0;
 
             public TargetInfo(MechJebModuleTargetController target)
             {
@@ -102,18 +101,6 @@ namespace MuMech
                         orbitClosestToTarget = Vector3.ProjectOnPlane(currentTargetRadialVector, orbitNormal);
                         Vector3 targetForward = -Vector3.Cross(orbitClosestToTarget.normalized, orbitNormal);
 
-                        if (targetOffset != 0)
-                        {
-                            if (targetOffset < 0.5 * UtilMath.Deg2Rad * mainBody.Radius)
-                            {
-                                orbitClosestToTarget += (targetOffset * targetForward); // small distance
-                            }
-                            else
-                            {
-                                //long distance: rotate target by radiant distance
-                                orbitClosestToTarget = Quaternion.AngleAxis((float)(UtilMath.Rad2Deg * targetOffset / mainBody.Radius), orbitNormal) * orbitClosestToTarget;
-                            }
-                        }
                         differenceTarget = orbitClosestToTarget - currentImpactRadialVector;
 
                         //How far ahead the target is compared to impact, in degrees

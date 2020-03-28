@@ -22,8 +22,7 @@ namespace MuMech
             {
                 doAfterExecution = new AtmosphericCorrection(core);
 
-                targetInfo = new TrajectoriesConnector.TargetInfo(core.target)
-                                { targetOffset = core.landing.reentryTargetAhead };
+                targetInfo = new TrajectoriesConnector.TargetInfo(core.target);
             }
 
             // calculate deorbit node and if node is acceptable base class will excute it
