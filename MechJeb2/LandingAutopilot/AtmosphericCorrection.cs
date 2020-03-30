@@ -24,8 +24,6 @@ namespace MuMech
                 public double breakDistance;
                 VesselState vesselState;
 
-                class DragList { public double maxSpeed; public float totalDrag; };
-
                 public ParachuteInfo(VesselState vesselState)
                 {
                     this.vesselState = vesselState;
@@ -57,19 +55,20 @@ namespace MuMech
                     foreach (var pt in parachuteTypes)
                     {
                         double effSpeed = Math.Min(curSpeed, pt.Key);
+                        float dragForce = pt.Value.Item1 * PhysicsGlobals.DragMultiplier * 0.0005f * (float) curDensity * (float) vesselState.speedSurface;
                         // base equation deceleration term + chute reaction term: x = 0.5 * v^2  * m / F_1 + v * t
                         // change if later chute with F_2 opens: -0.5 * F_2/F_1 * v_2^2 * m / (F_1+F_2)
                         // reaction time on later chutes are neglectable since we already have one chute open and speeds are lower
                         if (breakDistance == 0) // first term for highest speed
                         {
-                            breakDistance = 0.5 * (effSpeed * effSpeed) * vesselState.mass / (PhysicsGlobals.DragMultiplier * pt.Value.Item1) + effSpeed * pt.Value.Item2; 
+                            breakDistance = 0.5 * (effSpeed * effSpeed) * vesselState.mass / dragForce + effSpeed * pt.Value.Item2; 
                             maxSpeed = pt.Key;
-                            totalDrag = pt.Value.Item1;
+                            totalDrag = dragForce;
                         }
                         else
                         {
-                            breakDistance -= 0.5 * (pt.Value.Item1 / totalDrag) * (effSpeed * effSpeed) * vesselState.mass / (PhysicsGlobals.DragMultiplier * (totalDrag + pt.Value.Item1));
-                            totalDrag += pt.Value.Item1;
+                            breakDistance -= 0.5 * (dragForce / totalDrag) * (effSpeed * effSpeed) * vesselState.mass / (totalDrag + pt.Value.Item1);
+                            totalDrag += dragForce;
                         }                        
                     }
                     Debug.Log(String.Format("Parachute update speed={0:F0} maxSpeed={1:F0} break dist={2:F0}", curSpeed, maxSpeed, breakDistance));
@@ -104,9 +103,7 @@ namespace MuMech
                     case Phase.descend:
                         descend();
                         if (core.landing.deployChutes &&
-                            vesselState.parachutes.Any(p => p.deploymentSafeState == ModuleParachute.deploymentSafeStates.SAFE
-                                                        || p.deploymentState == ModuleParachute.deploymentStates.SEMIDEPLOYED
-                                                        || p.deploymentState == ModuleParachute.deploymentStates.DEPLOYED))
+                            vesselState.parachutes.Any(p => p.deploymentSafeState == ModuleParachute.deploymentSafeStates.SAFE && p.deploymentState == ModuleParachute.deploymentStates.STOWED))
                         {
                             phase = Phase.parachutes;                            
                             core.attitude.attitudeTo(TrajectoriesConnector.API.PlannedOrientation().Value, AttitudeReference.SURFACE_VELOCITY, this);
@@ -121,6 +118,8 @@ namespace MuMech
                         // control parachute opening
                         if (dist <= 0)
                             deployParachutes();
+                        if (vesselState.parachutes.All(p => p.deploymentState != ModuleParachute.deploymentStates.STOWED))
+                            return new FinalDescent(core);
                         break;
                 }
 
@@ -170,6 +169,7 @@ namespace MuMech
                 }
             }
 
+            bool aeroClamp = false;
             void descend()
             {
                 Quaternion courseCorrection = Quaternion.identity;
@@ -187,7 +187,6 @@ namespace MuMech
                 String logs = String.Format("Atmo Correction alt:{0:F0}, speed hor:{1:F0}, AoA: {2:F1}, dist:{3:F0}", vesselState.altitudeASL.value, vesselState.speedSurfaceHorizontal.value, vesselState.AoA.value, targetInfo.forwardDistance);
 
                 double backwardCorrection = targetInfo.backwardDifference / targetInfo.forwardDistance;
-                bool additionalCorrection;
 
                 logs += String.Format(", target back:{0:F0} corr:{1:F4} break:{2:F0} corr:{3:F4}", targetInfo.backwardDifference, backwardCorrection, breakingDistance, breakingCorrection);
 
@@ -198,7 +197,7 @@ namespace MuMech
                     //if we are less than 0°-60° turned on entry or 0-30° otherwise, simply turn more or less to hit target
                     if (!TrajectoriesConnector.API.isBelowEntry() && Math.Abs(backwardCorrection) > 0.02 )
                     {
-                        AoA = MuUtils.Clamp(AoA - Math.Sign(backwardCorrection) * 0.5, 120d, 180d);
+                        AoA = MuUtils.Clamp(AoA - Math.Sign(backwardCorrection) * 0.5, 120d, 180d, out aeroClamp, out _);
                         if (Math.Abs(TrajectoriesConnector.API.AoA.Value - AoA) > 0.1) 
                         {
                             TrajectoriesConnector.API.AoA = AoA;
@@ -208,7 +207,7 @@ namespace MuMech
                     }
                     else if (Math.Abs(backwardCorrection) > 0.02 )
                     {
-                        AoA = MuUtils.Clamp(AoA - Math.Sign(backwardCorrection) * 0.5, 150d, 180d);
+                        AoA = MuUtils.Clamp(AoA - Math.Sign(backwardCorrection) * 0.5, 150d, 180d, out aeroClamp, out _);
                         if (TrajectoriesConnector.API.AoA != AoA)
                         {
                             TrajectoriesConnector.API.AoA = AoA;
@@ -216,6 +215,14 @@ namespace MuMech
                             TrajectoriesConnector.API.invalidateCalculation();
                         }
                     }
+                    if (aeroClamp && backwardCorrection > 0)
+                    {
+                        core.thrust.targetThrottle = Mathf.Clamp01(10f * (float)backwardCorrection); //full thrust for 10% over target => early corrections
+                        logs += String.Format(", reverse thrust=>{0:F0}%", core.thrust.targetThrottle * 100f);
+                        status += ", +THRUST";
+                    }
+                    else if (!aeroClamp)
+                        core.thrust.targetThrottle = 0; // safeguard, actually backwardCorrection should be 0 before Angle gets reduced
                 }
 
                 float courseDiffRate=0;

@@ -38,6 +38,7 @@ namespace MuMech
                 return this;
             }
 
+            MovingAverage finalDifferenceTarget = new MovingAverage(120, 100);
             public override AutopilotStep Drive(FlightCtrlState s)
             {
                 if (vessel.LandedOrSplashed)
@@ -82,8 +83,21 @@ namespace MuMech
                         // always point up towards target, so any lift providing surface will get us closer
                         Vector3d diff = core.target.GetPositionTargetPosition()- core.landing.LandingSite;
                         core.attitude.attitudeTo(Quaternion.LookRotation(-vesselState.surfaceVelocity, diff), AttitudeReference.INERTIAL, null);
+                        // for fine tuning we need to reduce deploy angles or we just spin around target
+                        finalDifferenceTarget.value = diff.magnitude;
+                        if (finalDifferenceTarget < 100)
+                        {
+                            foreach (var mcs in vessel.FindPartModulesImplementing<ModuleControlSurface>())
+                            {
+                                if (mcs.deploy)
+                                {
+                                    Vector2 scaledLimit = Vector2.Max((float)finalDifferenceTarget / 100f * mcs.deployAngleLimits,new Vector2(-2,2));
+                                    mcs.deployAngle = Mathf.Clamp(mcs.deployAngle, scaledLimit.x, scaledLimit.y);
+                                }
+                            }
+                        }
 
-                        Debug.Log(String.Format("Diff to target: {0:F2} ", (Vector3) diff));
+                        //Debug.Log(String.Format("Diff to target: {0:F2} ", (Vector3) diff));
 
                         //assume we fall straight due to parachutes
                         double maxSpeed = 0.9 * Math.Sqrt( 2d * vesselState.altitudeTrue * (vesselState.limitedMaxThrustAccel - mainBody.GeeASL * 9.81));
@@ -116,8 +130,17 @@ namespace MuMech
                 }
                 else
                 {
-                    // last 200 meters:
-                    core.thrust.trans_spd_act = -Mathf.Lerp(0, (float)Math.Sqrt((vesselState.limitedMaxThrustAccel - vesselState.localg) * 2 * 200) * 0.90F, (float)minalt / 200);
+                    if (useChute)
+                    {
+                        // ramp down from terminal velocity or current speed, but gravitation is already balanced by drag
+                        float v_terminal = (float) Math.Max(vesselState.TerminalVelocity(),vesselState.speedSurface);
+                        core.thrust.trans_spd_act = -Mathf.Lerp(0, v_terminal, 0.6666667f* (float) minalt / (v_terminal * v_terminal) * 2f * (float) vesselState.limitedMaxThrustAccel);
+                    }
+                    else
+                    {
+                        // last 200 meters ramp down free falling speed
+                        core.thrust.trans_spd_act = -Mathf.Lerp(0, (float)Math.Sqrt((vesselState.limitedMaxThrustAccel - vesselState.localg) * 2 * 200) * 0.90F, (float)minalt / 200);
+                    }
 
                     // take into account desired landing speed:
                     core.thrust.trans_spd_act = (float)Math.Min(-core.landing.touchdownSpeed, core.thrust.trans_spd_act);
