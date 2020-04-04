@@ -35,6 +35,7 @@ namespace MuMech
                     maxSpeed = 0;
                     breakDistance = 0;
                     curDensity = Math.Max(curDensity, 0.2 * vesselState.mainBody.atmDensityASL);
+                    double curSpeedOfSound = Math.Max(vesselState.speedOfSound, vesselState.mainBody.GetSpeedOfSound( 0.2 * vesselState.mainBody.atmPressureASL , 0.2* vesselState.mainBody.atmDensityASL));
                     //create List by descending order of maxSpeed with drag and max chute reaction time
                     SortedList<double, (float, float)> parachuteTypes = new SortedList<double, (float, float)>(Comparer<double>.Create( (a, b) => Math.Sign(b-a) ) );
                     foreach (var p in vesselState.parachutes)
@@ -43,35 +44,59 @@ namespace MuMech
                         {
                             p.refDensity = curDensity;
                             p.CalcBaseStats();
-
+                            DragCubeList simParachute = new DragCubeList();
+                            simParachute.LoadCube(p.part.DragCubes, "DEPLOYED");
+                            simParachute.SetPart(p.part);
+                            simParachute.SetOcclusionMultiplier(0f);
+                            simParachute.ResetCubeWeights();
+                            simParachute.SetDragWeights();
+                            simParachute.SetPartOcclusion();                          
+                            //Debug.Log(String.Format("ParachuteInfo.update Parchute {0} has up Cube area={1:F1} drag={2:F1} weight={3:F1} AreaOccluded={4:F1}",
+                            //    p.part.name, simParachute.Cubes[0].Area[(int) DragCube.DragFace.YP], simParachute.Cubes[0].Drag[(int) DragCube.DragFace.YP],
+                            //    simParachute.Cubes[0].Weight, simParachute.AreaOccluded[(int)DragCube.DragFace.YP]));
+                            DragCubeList.CubeData simDrag = new DragCubeList.CubeData();
+                            simParachute.AddSurfaceDragDirection(Vector3.up, (float)(p.maxSafeSpeedAtRef/ curSpeedOfSound), ref simDrag);
+                            //Debug.Log(String.Format("ParachuteInfo.update Parchute {0} has areaDrag={1:F1}, crossSectionalArea={2:F1}, exposedArea={3:F1}",
+                            //          p.part.name, simDrag.areaDrag, simDrag.crossSectionalArea, simDrag.exposedArea));
                             if (parachuteTypes.ContainsKey(p.maxSafeSpeedAtRef))
-                                parachuteTypes[p.maxSafeSpeedAtRef] = (parachuteTypes[p.maxSafeSpeedAtRef].Item1 + p.fullyDeployedDrag,
+                                parachuteTypes[p.maxSafeSpeedAtRef] = (parachuteTypes[p.maxSafeSpeedAtRef].Item1 + simDrag.areaDrag,
                                                                        Mathf.Max(parachuteTypes[p.maxSafeSpeedAtRef].Item2, p.Anim[p.semiDeployedAnimation].length / p.semiDeploymentSpeed + p.Anim[p.fullyDeployedAnimation].length / p.deploymentSpeed));
                             else
-                                parachuteTypes.Add(p.maxSafeSpeedAtRef, (p.fullyDeployedDrag, p.Anim[p.semiDeployedAnimation].length / p.semiDeploymentSpeed + p.Anim[p.fullyDeployedAnimation].length / p.deploymentSpeed));
+                                parachuteTypes.Add(p.maxSafeSpeedAtRef, (simDrag.areaDrag, p.Anim[p.semiDeployedAnimation].length / p.semiDeploymentSpeed + p.Anim[p.fullyDeployedAnimation].length / p.deploymentSpeed));
                         }
                     }
-                    float totalDrag = 0;
+                    float totalFriction = 0;
                     foreach (var pt in parachuteTypes)
                     {
                         double effSpeed = Math.Min(curSpeed, pt.Key);
-                        float dragForce = pt.Value.Item1 * PhysicsGlobals.DragMultiplier * 0.0005f * (float) curDensity * (float) vesselState.speedSurface;
-                        // base equation deceleration term + chute reaction term: x = 0.5 * v^2  * m / F_1 + v * t
-                        // change if later chute with F_2 opens: -0.5 * F_2/F_1 * v_2^2 * m / (F_1+F_2)
-                        // reaction time on later chutes are neglectable since we already have one chute open and speeds are lower
+                        // base equation deceleration term + chute reaction term with deceleration taken from moving equations with netwon friction
+                        // during reaction time we hardly break, so assume 
+                        float friction_const = pt.Value.Item1 * 0.0005f * (float)curDensity* PhysicsGlobals.DragMultiplier 
+                            * PhysicsGlobals.DragCubeMultiplier * PhysicsGlobals.DragCurvePseudoReynolds.Evaluate((float) (effSpeed *curDensity)) ;
                         if (breakDistance == 0) // first term for highest speed
-                        {
-                            breakDistance = 0.5 * (effSpeed * effSpeed) * vesselState.mass / dragForce + effSpeed * pt.Value.Item2; 
-                            maxSpeed = pt.Key;
-                            totalDrag = dragForce;
+                        {                            
+                            breakDistance = (float)vesselState.mass / friction_const * Math.Log(effSpeed) + effSpeed * pt.Value.Item2;
+                            maxSpeed = effSpeed;
+                            totalFriction = friction_const;
+                            //Debug.Log(String.Format("ParachuteInfo.update has first chute type with friction={0:F4} and effSpeed={1:F0}, delay={3:F1} results break dist={2:F0}", friction_const, effSpeed, breakDistance, pt.Value.Item2));
                         }
                         else
-                        {
-                            breakDistance -= 0.5 * (dragForce / totalDrag) * (effSpeed * effSpeed) * vesselState.mass / (totalDrag + pt.Value.Item1);
-                            totalDrag += dragForce;
-                        }                        
+                        {                            
+                            // calculate slowdown during parachute opening using old friction
+                            effSpeed *= (float)vesselState.mass / (totalFriction * pt.Value.Item2 *effSpeed + vesselState.mass);
+                            breakDistance -= (float)vesselState.mass / (totalFriction + friction_const) * friction_const / totalFriction * Math.Log(effSpeed);
+                            totalFriction += friction_const;
+                            //Debug.Log(String.Format("ParachuteInfo.update has next chute type with friction={0:F4} and effSpeed={1:F0}, delay={3:F1} results break dist={2:F0}", friction_const, effSpeed, breakDistance, pt.Value.Item2));
+                        }
                     }
-                    Debug.Log(String.Format("Parachute update speed={0:F0} maxSpeed={1:F0} break dist={2:F0}", curSpeed, maxSpeed, breakDistance));
+                    if (totalFriction > 0)
+                    {
+                        double terminalSpeed = Math.Sqrt((float)vesselState.mass / totalFriction * vesselState.mainBody.GeeASL);
+                        //we are not getting slower than terminal velocity, so substract this as best guess for integration constant v
+                        breakDistance -= (float)vesselState.mass / totalFriction * Math.Log(terminalSpeed);
+                        //Debug.Log(String.Format("ParachuteInfo.update has terminal velocity term with friction={0:F4} and terminalSpeed={1:F0} results break dist={2:F0}", totalFriction, terminalSpeed, breakDistance));
+                    }
+                    Debug.Log(String.Format("ParachuteInfo.update for speed={0:F0} gives maxSpeed={1:F0} break dist={2:F0}", curSpeed, maxSpeed, breakDistance));
                 }
             }
             ParachuteInfo parachuteInfo;
@@ -112,7 +137,7 @@ namespace MuMech
                         break;
                     case Phase.parachutes:
                         parachuteInfo.update(vesselState.speedSurface, vesselState.atmosphericDensity);
-                        double dist = targetInfo.forwardDistance - parachuteInfo.breakDistance;
+                        double dist = Vector3d.Dot(targetInfo.distanceTarget, vesselState.horizontalSurface) - parachuteInfo.breakDistance;
                         Debug.Log(String.Format("Waiting for parachutes to open Speed:{0:F0} dist:{1:F0} break:{2:F0} maxSpeed:{3:F0} ", vesselState.speedSurface, targetInfo.forwardDistance, breakingDistance, parachuteInfo.maxSpeed));
                         status = "Waiting "+MuUtils.ToSI(dist)+ "m with parachutes deploy to hit target";
                         // control parachute opening
