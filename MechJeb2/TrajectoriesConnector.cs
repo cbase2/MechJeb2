@@ -11,7 +11,7 @@ namespace MuMech
         //ToDo: instantiate API with Reflections
         public class API
         {
-            public static Vector3? GetImpactPosition() { return Trajectories.API.GetImpactPosition(); }
+            public static Vector3? GetTrueImpactPosition() { return Trajectories.API.GetTrueImpactPosition(); }
 
             public static double? GetTimeTillImpact() { return Trajectories.API.GetTimeTillImpact(); }
 
@@ -22,12 +22,6 @@ namespace MuMech
             public static double? AoA {
                 get { return Trajectories.API.AoA; }
                 set { Trajectories.API.AoA=value; }
-            }
-
-            public static double? nextAoA
-            {
-                get { return Trajectories.API.nextAoA; }
-                set { Trajectories.API.nextAoA = value; }
             }
 
             public static bool? RetrogradeEntry { get { return Trajectories.API.RetrogradeEntry; } }
@@ -47,24 +41,26 @@ namespace MuMech
         {
             CelestialBody mainBody;
             MechJebModuleTargetController target;
+            double targetAlt;
             VesselState vesselState;
 
             public TargetInfo(MechJebModuleTargetController target)
             {
                 this.mainBody = target.mainBody;
                 this.target = target;
+                targetAlt = mainBody.TerrainAltitude(target.targetLatitude, target.targetLongitude, !mainBody.ocean);
                 this.vesselState = target.vesselState;
             }
             public bool isValid = false;
             protected double timestamp;
 
-            Vector3d currentImpactRadialVector;
+            Vector3d trueImpactRadialVector;
             Vector3d lastImpactRadialVector;
-            Vector3d currentTargetRadialVector;            
+            Vector3d trueTargetRadialVector;            
             double timeTillImpact;
 
-            public Vector3d CurrentTargetRadialVector { get { update(); return currentTargetRadialVector; } }
-            public Vector3d CurrentImpactRadialVector { get { update(); return currentImpactRadialVector; } }
+            public Vector3d TrueTargetRadialVector { get { update(); return trueTargetRadialVector; } }
+            public Vector3d TrueImpactRadialVector { get { update(); return trueImpactRadialVector; } }
             public double TimeTillImpact { get { update(); return timeTillImpact; } }
 
             Vector3 orbitNormal;
@@ -84,32 +80,35 @@ namespace MuMech
             {
                 if (Planetarium.GetUniversalTime() != timestamp)
                 {
-                    Vector3? impactPos = API.GetImpactPosition();
+                    Vector3? impactPos = API.GetTrueImpactPosition();
 
                     if (impactPos.HasValue)
                     {
-                        lastImpactRadialVector = currentImpactRadialVector;
-                        currentImpactRadialVector = impactPos.Value;
+                        lastImpactRadialVector = trueImpactRadialVector;
+                        trueImpactRadialVector = impactPos.Value;
                         timeTillImpact = API.GetTimeTillImpact().Value;
 
-                        isValid = (lastImpactRadialVector - currentImpactRadialVector).magnitude < 100;
+                        isValid = (lastImpactRadialVector - trueImpactRadialVector).magnitude < 100;
 
-                        currentTargetRadialVector = mainBody.GetWorldSurfacePosition(target.targetLatitude, target.targetLongitude, 0) - mainBody.position;
+                        trueTargetRadialVector = mainBody.GetWorldSurfacePosition(target.targetLatitude, target.targetLongitude, targetAlt) - mainBody.position;
+                        //float angle = (float)(timeTillImpact * mainBody.angularVelocity.magnitude / Math.PI * 180.0);
+                        //trueTargetRadialVector = Quaternion.AngleAxis(angle, mainBody.angularVelocity.normalized) * trueTargetRadialVector;
+                        trueTargetRadialVector = Quaternion.AngleAxis(-360f * (float) mainBody.rotPeriodRecip * Mathf.Lerp(0f, (float)timeTillImpact,(float) (vesselState.altitudeASL/mainBody.atmosphereDepth)), mainBody.RotationAxis) * trueTargetRadialVector;
                         orbitNormal = target.orbit.SwappedOrbitNormal();
 
-                        orbitClosestToImpact = Vector3.ProjectOnPlane(currentImpactRadialVector, orbitNormal);
-                        orbitClosestToTarget = Vector3.ProjectOnPlane(currentTargetRadialVector, orbitNormal);
+                        orbitClosestToImpact = Vector3.ProjectOnPlane(trueImpactRadialVector, orbitNormal);
+                        orbitClosestToTarget = Vector3.ProjectOnPlane(trueTargetRadialVector, orbitNormal);
                         Vector3 targetForward = -Vector3.Cross(orbitClosestToTarget.normalized, orbitNormal);
 
-                        differenceTarget = orbitClosestToTarget - currentImpactRadialVector;
+                        differenceTarget = orbitClosestToTarget - trueImpactRadialVector;
 
                         //How far ahead the target is compared to impact, in degrees
-                        targetAheadAngle = Vector3.SignedAngle(orbitClosestToTarget, orbitClosestToImpact, orbitNormal);
+                        targetAheadAngle = Vector3.SignedAngle(orbitClosestToTarget, trueImpactRadialVector, orbitNormal);
                                                 
-                        distanceTarget = currentTargetRadialVector - vesselState.orbitalPosition;
-                        distanceImpact = currentImpactRadialVector - vesselState.orbitalPosition;
+                        distanceTarget = trueTargetRadialVector - vesselState.orbitalPosition;
+                        distanceImpact = trueImpactRadialVector - vesselState.orbitalPosition;
                         //calculate sideway derivation at target location, which means we have to rescale if current impact is earlier or later
-                        normalDifference = (Vector3d.Dot(currentTargetRadialVector-orbitClosestToImpact, orbitNormal) * distanceTarget.magnitude / distanceImpact.magnitude);
+                        normalDifference = Vector3d.Dot(trueTargetRadialVector- trueImpactRadialVector, orbitNormal);
                         backwardDifference = -Vector3d.Dot(differenceTarget, targetForward); /* = overshoot >0, too short <0 */
                         forwardDistance = Vector3d.Dot(distanceTarget, targetForward); 
                     }
@@ -117,6 +116,12 @@ namespace MuMech
                         isValid = false;
                     timestamp = Planetarium.GetUniversalTime();
                 }
+            }
+            public void invalidateCalculation()
+            {
+                timestamp = 0;
+                isValid = false;
+                API.invalidateCalculation();
             }
         }
 
@@ -139,6 +144,5 @@ namespace MuMech
                 API.invalidateCalculation();
             }
         }
-
     }
 }

@@ -8,15 +8,16 @@ namespace MuMech
         public class AtmosphericDeorbit : NodeExecution
         {
             public static float deorbitprecision = 500f;
-            
-            enum Phase { init, plan, measure, execute};
+            public static int maxIterations = 50;
+            int iteration = 0;
+            double minDiff;
+            double minUT;
+
+            enum Phase { init, deorbit, minOrbit, planeChange, execute};
             Phase phase = Phase.init;
 
             Vector3d lastImpactRadialVector = Vector3d.zero;
             TrajectoriesConnector.TargetInfo targetInfo;
-
-            double origAirAngle, minAngle, maxAngle;
-            double origDifference, minDifference, maxDifference;
 
             public AtmosphericDeorbit(MechJebCore core) : base(core)
             {
@@ -44,25 +45,39 @@ namespace MuMech
                         vessel.PlaceManeuverNode(vessel.orbit, OrbitalManeuverCalculator.DeltaVToChangePeriapsis(orbit, vesselState.time, mainBody.Radius + core.landing.reentryTargetHeight), vesselState.time);
                         TrajectoriesConnector.API.SetTarget(core.target.targetLatitude, core.target.targetLongitude);
                         status = "Calculating deorbit trajectory";
-                        phase = Phase.plan;
+                        phase = Phase.deorbit;
+                        iteration = 0;
                         break;
-                    case Phase.plan:
+                    case Phase.deorbit:
                         targetInfo.update();
-                        if (targetInfo.isValid && optimizeNode())
+                        if (targetInfo.isValid && optimizeDeorbit())
                         {
-                            //minDifference = maxDifference = -origDifference;
-                            //minAngle = maxAngle = origAirAngle = TrajectoriesConnector.AirAngle; // we are only optimized with valid trajectory
-                            //TrajectoriesConnector.AirAngle = origAirAngle - 15;
-                            //phase = Phase.measure;
-                            phase = Phase.execute; 
+                            iteration = 30;
+                            phase = Phase.minOrbit;
+                        }
+                        else
+                        {                            
+                            if (iteration > maxIterations)
+                            {
+                                status = "Deorbit giving up in search for node, do manual deorbit";
+                                core.landing.StopLanding();
+                                return null;
+                            }
                         }
                         break;
-                    case Phase.measure:
-                        status = "Analyzing impact with different angles";
+                    case Phase.minOrbit:
                         targetInfo.update();
-                        // we have deorbit node and drive will turn to it, but meanwhile measure how changing AirAngle affects target difference
-                        if (targetInfo.isValid && measureAngle())
-                            phase = Phase.execute; //we are done measuring
+                        if (targetInfo.isValid && minOrbit())
+                        {
+                            phase = Phase.planeChange;
+                        }
+                        break;
+                    case Phase.planeChange:
+                        targetInfo.update();
+                        if (targetInfo.isValid && optimizePlaneChange())
+                        {
+                            phase = Phase.execute;
+                        }
                         break;
                     case Phase.execute:
                         return base.OnFixedUpdate();
@@ -71,7 +86,7 @@ namespace MuMech
                 return this;
             }
 
-            bool optimizeNode()
+            bool optimizeDeorbit()
             {
 
                 //Debug.Log(String.Format("Autoland: currentImpactRadialVector={0} currentTargetRadialVector={1} differenceTarget={2}", targetInfo.currentImpactRadialVector, targetInfo.currentTargetRadialVector, targetInfo.differenceTarget));
@@ -80,7 +95,6 @@ namespace MuMech
 
                 if (Math.Abs(targetInfo.targetAheadAngle) < 0.5 && Math.Abs(targetInfo.backwardDifference) < deorbitprecision)
                 {
-                    origDifference = targetInfo.backwardDifference;
                     return true; // execute plannedNode
                 }
                 else
@@ -110,47 +124,53 @@ namespace MuMech
                     status = String.Format("Optimizing deorbit time based on trajectory prediction, shift by {0:F4} degree, {1:F0} m equals {2:F1} seconds", targetInfo.targetAheadAngle, targetInfo.backwardDifference, deorbitTime - plannedNode.UT);
                     Debug.Log("Autoland: " + status);
 
+                    // deltaV needs to rotate
                     plannedNode.RemoveSelf();
                     vessel.PlaceManeuverNode(vessel.orbit, OrbitalManeuverCalculator.DeltaVToChangePeriapsis(orbit, deorbitTime, mainBody.Radius + core.landing.reentryTargetHeight), deorbitTime);
-                    TrajectoriesConnector.API.invalidateCalculation();
+                    targetInfo.invalidateCalculation();
+                    iteration++;
                 }
 
                 return false;
             }
 
-            bool measureAngle()
+            // find orbit round with min normalDiff to target, makes only sense if we are in inclined orbit
+            bool minOrbit()
             {
-                double currentAirAngle = TrajectoriesConnector.AoA;
+                ManeuverNode plannedNode = vessel.patchedConicSolver.maneuverNodes[0];
 
-                if (targetInfo.backwardDifference < minDifference)
+                if (Math.Abs(orbit.inclination)<5)
+                    return true;
+                Debug.Log(String.Format("Current deorbit round at t={0:F0} has normalDiff={1:F1}", plannedNode.UT - Planetarium.GetUniversalTime(), targetInfo.normalDifference));
+                if (iteration == 0 || Math.Abs(targetInfo.normalDifference) < minDiff)
                 {
-                    minDifference = targetInfo.backwardDifference;
-                    minAngle = currentAirAngle;
+                    Debug.Log(String.Format("Found new optimum deorbit round at t={0:F0} for normalDiff={1:F1} ", plannedNode.UT-Planetarium.GetUniversalTime(), targetInfo.normalDifference));
+                    minDiff = Math.Abs(targetInfo.normalDifference);
+                    minUT = plannedNode.UT;
                 }
-                else if (targetInfo.backwardDifference > maxDifference)
+                iteration++;
+                if (iteration > maxIterations)
                 {
-                    maxDifference = targetInfo.backwardDifference;
-                    maxAngle = currentAirAngle;
-                }
-
-                if (currentAirAngle >= origAirAngle + 15)
-                {
-                    //min/maxAngle are named here as they are associated to min and max difference
-                    // next step needs them proper ordered for Clamp
-                    // factor is negative if we need to decrease angle to increase backward difference
-                    core.landing.minAngle = Math.Min(minAngle, maxAngle);
-                    core.landing.maxAngle = Math.Max(minAngle, maxAngle);
-                    core.landing.factor = (maxAngle-minAngle)/(maxDifference - minDifference);
-                    TrajectoriesConnector.AoA = origAirAngle;
-                    Debug.Log(String.Format("Done analyzing vessel aerodynamic, approach angles =[{0:F1},{1:F1}] backward diff= [{3:F0},{4:F0}] difference gives factor = {2:G4}", minAngle, maxAngle, core.landing.factor, minDifference, maxDifference));
+                    plannedNode.RemoveSelf();
+                    vessel.PlaceManeuverNode(vessel.orbit, OrbitalManeuverCalculator.DeltaVToChangePeriapsis(orbit, minUT, mainBody.Radius + core.landing.reentryTargetHeight), minUT);
+                    TrajectoriesConnector.API.invalidateCalculation();
                     return true;
                 }
-                else
-                {
-                    TrajectoriesConnector.AoA = currentAirAngle + 1;
-                }
-
+                // factor accounts for ground movement during orbit round
+                double nextRound = plannedNode.UT + orbit.period * vessel.mainBody.rotationPeriod / (vessel.mainBody.rotationPeriod - orbit.period);
+                plannedNode.RemoveSelf();
+                vessel.PlaceManeuverNode(vessel.orbit, OrbitalManeuverCalculator.DeltaVToChangePeriapsis(orbit, nextRound, mainBody.Radius + core.landing.reentryTargetHeight), nextRound);
+                targetInfo.invalidateCalculation();
                 return false;
+            }
+
+            bool optimizePlaneChange()
+            {
+                // modify Node to include required remaining planeChange
+                double lastPlaneChange = -2.0 * vesselState.speedOrbital * Math.Sin(0.5 * Math.Asin(targetInfo.normalDifference / targetInfo.distanceTarget.magnitude));
+                Debug.Log(String.Format("Autoland plane change {0:F1} for normalDiff={1:F1} ", (Vector3) (lastPlaneChange * orbit.GetOrbitNormal()), targetInfo.normalDifference));
+                vessel.patchedConicSolver.maneuverNodes[0].DeltaV += lastPlaneChange * orbit.GetOrbitNormal();
+                return true;
             }
         }
     }

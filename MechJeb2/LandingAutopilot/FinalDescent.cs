@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using System.Linq;
 
 namespace MuMech
 {
@@ -9,14 +10,12 @@ namespace MuMech
         {
 
             private IDescentSpeedPolicy aggressivePolicy;
-            private int waitForChute = 0;
+            private bool waitForChute = false;
             private bool useChute = false;
 
             public FinalDescent(MechJebCore core) : base(core)
             {
-                useChute = mainBody.atmosphere && core.landing.deployChutes && vesselState.parachutes.Count > 0;
-                if (useChute)
-                    waitForChute = 30;
+                useChute = mainBody.atmosphere && core.landing.deployChutes && vesselState.parachutes.Count > 0;                
             }
 
             public override AutopilotStep OnFixedUpdate()
@@ -49,7 +48,8 @@ namespace MuMech
                     return null;
                 }
 
-                if (waitForChute > 0) waitForChute--;
+                if (useChute)
+                    waitForChute = vesselState.parachutes.Any(p => p.Anim.isPlaying);
 
                 double minalt = Math.Min(vesselState.altitudeBottom, Math.Min(vesselState.altitudeASL, vesselState.altitudeTrue));
 
@@ -101,7 +101,7 @@ namespace MuMech
 
                         //assume we fall straight due to parachutes
                         double maxSpeed = 0.9 * Math.Sqrt( 2d * vesselState.altitudeTrue * (vesselState.limitedMaxThrustAccel - mainBody.GeeASL * 9.81));
-                        if (waitForChute == 0 && (vesselState.TerminalVelocity() > maxSpeed) )
+                        if (!waitForChute && (vesselState.TerminalVelocity() > maxSpeed) )
                         {
                             Debug.Log(String.Format("Emergency break in final descent alt:{0} accel:{1} maxSpeed:{2} terminal v:{3}", vesselState.altitudeTrue, vesselState.limitedMaxThrustAccel, maxSpeed, vesselState.TerminalVelocity()));
                             core.thrust.trans_spd_act = (float) maxSpeed;
@@ -130,25 +130,39 @@ namespace MuMech
                 }
                 else
                 {
-                    if (useChute)
+                    // + 15% safety margin on break distance + distance for last three second with touchdown speed for MechJeb Thrust PID to catch up
+                    double safety_alt = Math.Max(0.85D * (minalt - core.landing.touchdownSpeed * 3 /*s*/ ),0);
+                    if (mainBody.atmosphere)
                     {
-                        // ramp down from terminal velocity or current speed, but gravitation is already balanced by drag
-                        float v_terminal = (float) Math.Max(vesselState.TerminalVelocity(),vesselState.speedSurface);
-                        core.thrust.trans_spd_act = -Mathf.Lerp(0, v_terminal, 0.6666667f* (float) minalt / (v_terminal * v_terminal) * 2f * (float) vesselState.limitedMaxThrustAccel);
+                        // calculate effective terminal velocity for powered landing
+                        // it is smaller as reduced speed from slow down decreases drag
+                        // equations are derived from F = k * v^2 + m* ( a -g ), meaning accelerating from ground with help of drag
+                        // equation assumes that k is constant, which fails at bigger altitude, but within final touchdown it is safe assumption
+                        double a_eff = vesselState.limitedMaxThrustAccel - mainBody.GeeASL;
+                        double v_terminal = vesselState.TerminalVelocity() * Math.Sqrt(a_eff/mainBody.GeeASL);
+                        double x_0 = - 0.5D * v_terminal / a_eff * Math.Log( 1+ core.landing.touchdownSpeed * core.landing.touchdownSpeed/ (v_terminal * v_terminal));
+                        // v(t) = v_terminal * tan( a_eff * t / v_terminal) + arctan( touchdownSpeed / v_terminal) )
+                        // x(t) =  x_o - v_terminal^2 / a_eff * ln(cos(a_eff / v_terminal * t + arctan(touchdownSpeed / v_terminal) ))
+                        // note: equations are only for small t where assumption about drag holds -> parameter in cos stays in [0,pi/2]
+                        // v(x) = v_terminal * tan( arccos( e ^(-a_eff/v_terminal^2 * ( x -x_0))))
+                        // for survivable touchdownspeeds x_0 is few cm, so we neglect it
+                        core.thrust.trans_spd_act = (float) (-v_terminal * Math.Tan(Math.Acos(Math.Exp(-a_eff / (v_terminal * v_terminal) * safety_alt))));
+                        
+                        Debug.Log(String.Format("FinalDescent: Limit speed for safety alt={0:F0} with v_term={1:F1} and x_0={2:F1} to v_target={3:F1}, v={4:F1}", safety_alt, v_terminal, x_0, core.thrust.trans_spd_act, vesselState.speedVertical));
                     }
                     else
                     {
-                        // last 200 meters ramp down free falling speed
-                        core.thrust.trans_spd_act = -Mathf.Lerp(0, (float)Math.Sqrt((vesselState.limitedMaxThrustAccel - vesselState.localg) * 2 * 200) * 0.90F, (float)minalt / 200);
+                        // last 200 meters ramp down speed with limit of falling full throttle break 
+                        core.thrust.trans_spd_act = -Mathf.Sqrt((float)((vesselState.limitedMaxThrustAccel - vesselState.localg) * safety_alt * 2D + core.landing.touchdownSpeed * core.landing.touchdownSpeed));
                     }
-
                     // take into account desired landing speed:
                     core.thrust.trans_spd_act = (float)Math.Min(-core.landing.touchdownSpeed, core.thrust.trans_spd_act);
 
-//                    core.thrust.tmode = MechJebModuleThrustController.TMode.KEEP_VERTICAL;
-//                    core.thrust.trans_kill_h = true;
+                    //avoid hopping due to throttle PID oversteering on very last moment
+                    if (vesselState.speedVertical < 3 * core.landing.touchdownSpeed)
+                        core.thrust.pid.intAccum = 0;
 
-//                    if (Math.Abs(Vector3d.Angle(-vessel.surfaceVelocity, vesselState.up)) < 10)
+                    //                    if (Math.Abs(Vector3d.Angle(-vessel.surfaceVelocity, vesselState.up)) < 10)
                     if (vesselState.speedSurfaceHorizontal < 5)
                     {
                         // if we're falling more or less straight down, control vertical speed and 

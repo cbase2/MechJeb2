@@ -22,6 +22,7 @@ namespace MuMech
             {
                 public double maxSpeed;
                 public double breakDistance;
+                public double undeployedDistance;
                 VesselState vesselState;
 
                 public ParachuteInfo(VesselState vesselState)
@@ -66,6 +67,7 @@ namespace MuMech
                         }
                     }
                     float totalFriction = 0;
+                    double lastSpeed = 0;
                     foreach (var pt in parachuteTypes)
                     {
                         double effSpeed = Math.Min(curSpeed, pt.Key);
@@ -76,7 +78,8 @@ namespace MuMech
                         if (breakDistance == 0) // first term for highest speed
                         {                            
                             breakDistance = (float)vesselState.mass / friction_const * Math.Log(effSpeed) + effSpeed * pt.Value.Item2;
-                            maxSpeed = effSpeed;
+                            undeployedDistance = effSpeed * pt.Value.Item2;// - vesselState.mass / friction_const  ;
+                            maxSpeed = lastSpeed = effSpeed;
                             totalFriction = friction_const;
                             //Debug.Log(String.Format("ParachuteInfo.update has first chute type with friction={0:F4} and effSpeed={1:F0}, delay={3:F1} results break dist={2:F0}", friction_const, effSpeed, breakDistance, pt.Value.Item2));
                         }
@@ -85,6 +88,8 @@ namespace MuMech
                             // calculate slowdown during parachute opening using old friction
                             effSpeed *= (float)vesselState.mass / (totalFriction * pt.Value.Item2 *effSpeed + vesselState.mass);
                             breakDistance -= (float)vesselState.mass / (totalFriction + friction_const) * friction_const / totalFriction * Math.Log(effSpeed);
+                            undeployedDistance += pt.Value.Item2 * effSpeed;// + vesselState.mass * lastSpeed / (totalFriction * effSpeed) - vesselState.mass / (totalFriction + friction_const);
+                            lastSpeed = effSpeed;
                             totalFriction += friction_const;
                             //Debug.Log(String.Format("ParachuteInfo.update has next chute type with friction={0:F4} and effSpeed={1:F0}, delay={3:F1} results break dist={2:F0}", friction_const, effSpeed, breakDistance, pt.Value.Item2));
                         }
@@ -94,6 +99,7 @@ namespace MuMech
                         double terminalSpeed = Math.Sqrt((float)vesselState.mass / totalFriction * vesselState.mainBody.GeeASL);
                         //we are not getting slower than terminal velocity, so substract this as best guess for integration constant v
                         breakDistance -= (float)vesselState.mass / totalFriction * Math.Log(terminalSpeed);
+                        //undeployedDistance += vesselState.mass * lastSpeed / (totalFriction * terminalSpeed);
                         //Debug.Log(String.Format("ParachuteInfo.update has terminal velocity term with friction={0:F4} and terminalSpeed={1:F0} results break dist={2:F0}", totalFriction, terminalSpeed, breakDistance));
                     }
                     Debug.Log(String.Format("ParachuteInfo.update for speed={0:F0} gives maxSpeed={1:F0} break dist={2:F0}", curSpeed, maxSpeed, breakDistance));
@@ -103,7 +109,7 @@ namespace MuMech
 
             public AtmosphericCorrection(MechJebCore core) : base(core)
             {
-                targetInfo = new TrajectoriesConnector.TargetInfo(core.target);
+                targetInfo = new TrajectoriesConnector.TargetInfo(core.target); //plain target mode
                 parachuteInfo = new ParachuteInfo(vesselState);
 
                 Debug.Log(String.Format("AtmoCorrection parachute breakDist={0:F0} maxSpeed={1:F0}", parachuteInfo.breakDistance , parachuteInfo.maxSpeed));
@@ -211,7 +217,8 @@ namespace MuMech
 
                 String logs = String.Format("Atmo Correction alt:{0:F0}, speed hor:{1:F0}, AoA: {2:F1}, dist:{3:F0}", vesselState.altitudeASL.value, vesselState.speedSurfaceHorizontal.value, vesselState.AoA.value, targetInfo.forwardDistance);
 
-                double backwardCorrection = targetInfo.backwardDifference / targetInfo.forwardDistance;
+                // we aim for 1/3 after parachute break point
+                double backwardCorrection = (targetInfo.backwardDifference + 0.66* (parachuteInfo.undeployedDistance - parachuteInfo.breakDistance)) / targetInfo.forwardDistance;
 
                 logs += String.Format(", target back:{0:F0} corr:{1:F4} break:{2:F0} corr:{3:F4}", targetInfo.backwardDifference, backwardCorrection, breakingDistance, breakingCorrection);
 
@@ -240,7 +247,7 @@ namespace MuMech
                             TrajectoriesConnector.API.invalidateCalculation();
                         }
                     }
-                    if (aeroClamp && backwardCorrection > 0)
+                    if (core.thrust.targetThrottle != 0 || (aeroClamp && backwardCorrection > 0.05))
                     {
                         core.thrust.targetThrottle = Mathf.Clamp01(10f * (float)backwardCorrection); //full thrust for 10% over target => early corrections
                         logs += String.Format(", reverse thrust=>{0:F0}%", core.thrust.targetThrottle * 100f);
@@ -250,18 +257,21 @@ namespace MuMech
                         core.thrust.targetThrottle = 0; // safeguard, actually backwardCorrection should be 0 before Angle gets reduced
                 }
 
-                float courseDiffRate=0;
-                // turn plannedOrientation towards Reference(=velocity), this should reduce drag and maybe we get more distance covered
+                float rollForTarget=0;
+                // roll plannedOrientation towards target if we have signifikant lift
                 if (vesselState.lift > 1)
-                    courseDiffRate = Mathf.Asin((float) (2.0 * targetInfo.normalDifference / targetInfo.distanceTarget.magnitude 
-                                 * vesselState.mass * vesselState.speedSurface /(targetInfo.TimeTillImpact *vesselState.lift )) );
-
-                logs += String.Format(", normalDiff: {0:F0}, time: {1:F0}s, rollAngle={2:F1}",targetInfo.normalDifference, targetInfo.TimeTillImpact, courseDiffRate);
-                if (Mathf.Abs(courseDiffRate) < 0.0005 || targetInfo.normalDifference < 50 ) courseDiffRate = 0; //neglect very small differences
-                if (Mathf.Abs(courseDiffRate) > 0 && TrajectoriesConnector.API.isBelowEntry())
                 {
-                    status += String.Format(", roll towards target with {0:F1}", Mathf.Clamp(courseDiffRate, -1, 1) * 30);
-                    courseCorrection = Quaternion.AngleAxis(Mathf.Clamp(courseDiffRate, -1, 1) * 30, Vector3.forward);
+                    rollForTarget = -Mathf.Asin((float)(2.0 * targetInfo.normalDifference / targetInfo.distanceTarget.magnitude
+                                 * vesselState.mass * vesselState.speedSurface / (targetInfo.TimeTillImpact * vesselState.lift))) * Mathf.Rad2Deg;
+                    rollForTarget = Mathf.Clamp(rollForTarget, -30, 30);
+                }
+
+                logs += String.Format(", normalDiff: {0:F0}, time: {1:F0}s, rollAngle={2:F1}",targetInfo.normalDifference, targetInfo.TimeTillImpact, rollForTarget);
+                if (Mathf.Abs(rollForTarget) < 0.0005 || targetInfo.normalDifference < 50 ) rollForTarget = 0; //neglect very small differences
+                if (Mathf.Abs(rollForTarget) > 0 && TrajectoriesConnector.API.isBelowEntry())
+                {
+                    status += String.Format(", roll towards target with {0:F1}", rollForTarget );
+                    courseCorrection = Quaternion.AngleAxis(rollForTarget, Vector3.forward);
                 }
                 Debug.Log(logs);
 
