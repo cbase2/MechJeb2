@@ -16,8 +16,9 @@ namespace MuMech
 
             
             TrajectoriesConnector.TargetInfo targetInfo;
-            double breakingDistance;
-            
+            double breakDiff;
+            double gee; //convience for mainbody gee ASL in m/s²
+
             class ParachuteInfo
             {
                 public double maxSpeed;
@@ -96,22 +97,23 @@ namespace MuMech
                     }
                     if (totalFriction > 0)
                     {
-                        double terminalSpeed = Math.Sqrt((float)vesselState.mass / totalFriction * vesselState.mainBody.GeeASL);
+                        double terminalSpeed = Math.Sqrt((float)vesselState.mass / totalFriction * vesselState.mainBody.GeeASL * PhysicsGlobals.GravitationalAcceleration);
                         //we are not getting slower than terminal velocity, so substract this as best guess for integration constant v
                         breakDistance -= (float)vesselState.mass / totalFriction * Math.Log(terminalSpeed);
                         //undeployedDistance += vesselState.mass * lastSpeed / (totalFriction * terminalSpeed);
                         //Debug.Log(String.Format("ParachuteInfo.update has terminal velocity term with friction={0:F4} and terminalSpeed={1:F0} results break dist={2:F0}", totalFriction, terminalSpeed, breakDistance));
                     }
-                    Debug.Log(String.Format("ParachuteInfo.update for speed={0:F0} gives maxSpeed={1:F0} break dist={2:F0}", curSpeed, maxSpeed, breakDistance));
+                    Debug.Log(String.Format("ParachuteInfo.update for speed={0:F0} gives maxSpeed={1:F0} break dist={2:F0} undeployedDistance={3:F0}", curSpeed, maxSpeed, breakDistance, undeployedDistance));
                 }
             }
             ParachuteInfo parachuteInfo;
 
             public AtmosphericCorrection(MechJebCore core) : base(core)
             {
+                gee = mainBody.GeeASL * PhysicsGlobals.GravitationalAcceleration;
                 targetInfo = new TrajectoriesConnector.TargetInfo(core.target); //plain target mode
                 parachuteInfo = new ParachuteInfo(vesselState);
-
+                
                 Debug.Log(String.Format("AtmoCorrection parachute breakDist={0:F0} maxSpeed={1:F0}", parachuteInfo.breakDistance , parachuteInfo.maxSpeed));
             }
 
@@ -144,7 +146,7 @@ namespace MuMech
                     case Phase.parachutes:
                         parachuteInfo.update(vesselState.speedSurface, vesselState.atmosphericDensity);
                         double dist = Vector3d.Dot(targetInfo.distanceTarget, vesselState.horizontalSurface) - parachuteInfo.breakDistance;
-                        Debug.Log(String.Format("Waiting for parachutes to open Speed:{0:F0} dist:{1:F0} break:{2:F0} maxSpeed:{3:F0} ", vesselState.speedSurface, targetInfo.forwardDistance, breakingDistance, parachuteInfo.maxSpeed));
+                        Debug.Log(String.Format("Waiting for parachutes to open Speed:{0:F0} dist:{1:F0} break:{2:F0} maxSpeed:{3:F0} ", vesselState.speedSurface, targetInfo.forwardDistance, dist, parachuteInfo.maxSpeed));
                         status = "Waiting "+MuUtils.ToSI(dist)+ "m with parachutes deploy to hit target";
                         // control parachute opening
                         if (dist <= 0)
@@ -196,7 +198,7 @@ namespace MuMech
                 {
                     p.Deploy();
                     p.deployAltitude = (float) vesselState.altitudeTrue;
-                    Debug.Log(String.Format("Deploying Parachutes yeah ! Speed:{0:F0} dist:{1:F0} break:{2:F0} maxSpeed:{3:F0} ",vesselState.speedSurfaceHorizontal.value, targetInfo.forwardDistance, breakingDistance, parachuteInfo.maxSpeed));
+                    Debug.Log(String.Format("Deploying Parachutes yeah ! Speed:{0:F0} dist:{1:F0} break:{2:F0} maxSpeed:{3:F0} ",vesselState.speedSurfaceHorizontal.value, targetInfo.forwardDistance, breakDiff, parachuteInfo.maxSpeed));
                 }
             }
 
@@ -205,22 +207,17 @@ namespace MuMech
             {
                 Quaternion courseCorrection = Quaternion.identity;
 
-                breakingDistance = parachuteInfo.breakDistance;
+                // we aim for parachute break point with half deploy time for opening, which we can anticipate
+                breakDiff = targetInfo.backwardDifference - (core.landing.deployChutes ? 0.5D * parachuteInfo.undeployedDistance : 0);
 
-                // breaking dist with thrust to parachute speed 
-                if (vesselState.limitedMaxThrustAccel > 0)
-                    breakingDistance += 0.5 * (vesselState.speedSurfaceHorizontal * vesselState.speedSurfaceHorizontal - parachuteInfo.maxSpeed * parachuteInfo.maxSpeed) / vesselState.maxThrustAccel;
-                double breakingCorrection = breakingDistance / targetInfo.forwardDistance;
-
-                status = String.Format("Holding planned descent attitude, forward dist ={2:F1} targ backward={0:F1} break dist={1:F1}"
-                    , targetInfo.backwardDifference, breakingDistance, targetInfo.forwardDistance);
+                status = String.Format("Holding planned descent attitude, break diff={0:F1}", breakDiff);
 
                 String logs = String.Format("Atmo Correction alt:{0:F0}, speed hor:{1:F0}, AoA: {2:F1}, dist:{3:F0}", vesselState.altitudeASL.value, vesselState.speedSurfaceHorizontal.value, vesselState.AoA.value, targetInfo.forwardDistance);
 
-                // we aim for 1/3 after parachute break point
-                double backwardCorrection = (targetInfo.backwardDifference + 0.66* (parachuteInfo.undeployedDistance - parachuteInfo.breakDistance)) / targetInfo.forwardDistance;
+                
+                double backwardCorrection = breakDiff / targetInfo.forwardDistance;
 
-                logs += String.Format(", target back:{0:F0} corr:{1:F4} break:{2:F0} corr:{3:F4}", targetInfo.backwardDifference, backwardCorrection, breakingDistance, breakingCorrection);
+                logs += String.Format(", target back:{0:F0} corr:{1:F4} break:{2:F0}", targetInfo.backwardDifference, backwardCorrection, breakDiff);
 
 
                 if (targetInfo.isValid)
@@ -247,10 +244,10 @@ namespace MuMech
                             TrajectoriesConnector.API.invalidateCalculation();
                         }
                     }
-                    if (core.thrust.targetThrottle != 0 || (aeroClamp && backwardCorrection > 0.05))
+                    if (aeroClamp && (core.thrust.targetThrottle != 0 || backwardCorrection > 0.03))
                     {
-                        core.thrust.targetThrottle = Mathf.Clamp01(10f * (float)backwardCorrection); //full thrust for 10% over target => early corrections
-                        logs += String.Format(", reverse thrust=>{0:F0}%", core.thrust.targetThrottle * 100f);
+                        core.thrust.targetThrottle = Mathf.Clamp01((float)(gee / vesselState.limitedMaxThrustAccel * backwardCorrection)); // set thrust at 1G for 10% over target => early corrections, but slow enough for Trajectories
+                        logs += String.Format(", reverse thrust=>{0:P0}", core.thrust.targetThrottle);
                         status += ", +THRUST";
                     }
                     else if (!aeroClamp)
