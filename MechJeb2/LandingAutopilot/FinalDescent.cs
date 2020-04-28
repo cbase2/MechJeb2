@@ -162,7 +162,7 @@ namespace MuMech
                     core.thrust.trans_spd_act = (float)Math.Min(-core.landing.touchdownSpeed, core.thrust.trans_spd_act);
                                         
                     //avoid hopping due to throttle PID oversteering on very last moment, so we do direct control
-                    /*if (-vesselState.speedVertical < 3D * core.landing.touchdownSpeed && core.thrust.targetThrottle > 0.2 && safety_alt < 5)
+                    if (-vesselState.speedVertical < 3D * core.landing.touchdownSpeed && core.thrust.targetThrottle > 0.2 && safety_alt < 5)
                     {
                         core.attitude.attitudeTo(Quaternion.LookRotation(vesselState.up, vessel.transform.forward), AttitudeReference.INERTIAL, null);
                         if (-vesselState.speedVertical > core.landing.touchdownSpeed + 1D)
@@ -178,7 +178,7 @@ namespace MuMech
                         core.thrust.tmode = MechJebModuleThrustController.TMode.DIRECT;
                         Debug.Log(String.Format("FinalDescent: Touchdown soon ! safety alt={0:F1}, v_vertical={2:F1}, v_horizontal={3:F1} => thrust={1:F0} % ", safety_alt, core.thrust.trans_spd_act, vesselState.speedVertical.value, vesselState.speedSurfaceHorizontal.value));
                     }
-                    else */if (vesselState.speedSurfaceHorizontal < 5)
+                    else if (vesselState.speedSurfaceHorizontal < 5)
                     {
                         // if we're falling more or less straight down, control vertical speed and 
                         // kill horizontal velocity
