@@ -16,10 +16,10 @@ namespace MuMech
             Reset();
         }
 
-        public double Compute(double error)
+        public double Compute(double error, double prev_action = 0D)
         {
             intAccum += error * TimeWarp.fixedDeltaTime;
-            double action = (Kp * error) + (Ki * intAccum) + (Kd * (error - prevError) / TimeWarp.fixedDeltaTime);
+            double action = (Kp * error) + (Ki * intAccum) + (Kd * (error - prevError) / TimeWarp.fixedDeltaTime) + prev_action;
             double clamped = Math.Max(min, Math.Min(max, action));
             if (clamped != action)
             {
@@ -27,7 +27,7 @@ namespace MuMech
             }
             prevError = error;
 
-            return action;
+            return clamped;
         }
 
         public void Reset()

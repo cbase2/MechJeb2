@@ -273,7 +273,7 @@ namespace MuMech
         public override void OnStart(PartModule.StartState state)
         {
             preventingUnstableIgnitionsMessage = new ScreenMessage("<color=orange>[MechJeb]: Killing throttle to prevent unstable ignition</color>", 2f, ScreenMessageStyle.UPPER_CENTER);
-            pid = new PIDController(0.05, 0.000001, 0.05);
+            pid = new PIDController(0.15, 0.000001, 0.01, 1D, 0D);
             users.Add(this);
 
             base.OnStart(state);
@@ -400,7 +400,7 @@ namespace MuMech
                     t_err *= -1;
                 }
 
-                double t_act = pid.Compute(t_err);
+                double t_act = pid.Compute(t_err, trans_prev_thrust);
 
                 if ((tmode != TMode.KEEP_VERTICAL)
                     || !trans_kill_h
@@ -413,7 +413,7 @@ namespace MuMech
                     }
                     else
                     {
-                        trans_prev_thrust = targetThrottle = Mathf.Clamp01(trans_prev_thrust + (float)t_act);
+                        trans_prev_thrust = targetThrottle = (float)t_act;
                     }
                 }
                 else
