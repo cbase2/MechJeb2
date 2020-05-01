@@ -140,13 +140,15 @@ namespace MuMech
             parachutePlan = new ParachutePlan(this);
             parachutePlan.StartPlanning();
 
-            if (mainBody.atmosphere && orbit.PeA < mainBody.atmosphereDepth)
+            bool useTrajectoriesAtmo = TrajectoriesConnector.isLoadedTrajectories && mainBody.atmosphere;
+
+            if (useTrajectoriesAtmo && orbit.PeA < mainBody.atmosphereDepth)
                 setStep(new Landing.AtmosphericCorrection(core));
             else if (orbit.PeA < 0)
                 setStep(new Landing.CourseCorrection(core));
             else if (UseLowDeorbitStrategy())
                 setStep(new Landing.PlaneChange(core));
-            else if (mainBody.atmosphere)
+            else if (useTrajectoriesAtmo)
                 setStep(new Landing.AtmosphericDeorbit(core));
             else
                 setStep(new Landing.DeorbitBurn(core));

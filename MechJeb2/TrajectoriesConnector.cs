@@ -33,7 +33,7 @@ namespace MuMech
             public delegate void DinvalidateCalculation();
             public static DinvalidateCalculation invalidateCalculation;
 
-            public delegate void DSetTarget(double lat, double lon);
+            public delegate void DSetTarget(double lat, double lon, double? alt=null);
             public static DSetTarget SetTarget;
 
             public delegate double? DAoAGetter();
@@ -86,7 +86,7 @@ namespace MuMech
                     else
                         isLoadedTrajectories = false;
 
-                    m = ReflectionUtils.getMethodByReflection(assemblyname, apiclass, "SetTarget", BindingFlags.Public | BindingFlags.Static, new Type[] { typeof(double), typeof(double) });
+                    m = ReflectionUtils.getMethodByReflection(assemblyname, apiclass, "SetTarget", BindingFlags.Public | BindingFlags.Static, new Type[] { typeof(double), typeof(double), typeof(double) });
                     if (m != null)
                         SetTarget = (DSetTarget)Delegate.CreateDelegate(typeof(DSetTarget), m);
                     else
@@ -119,7 +119,7 @@ namespace MuMech
             public static bool? RetrogradeEntry { get { return RetrogradeEntryGetter(); } }
         }
 
-        // this is what is actually used in atmospheric landing
+        // convience class to process information from Trajectories for use in Autopilot
         public class TargetInfo
         {
             CelestialBody mainBody;
@@ -161,6 +161,7 @@ namespace MuMech
 
             public void update()
             {
+                // only update once per cycle
                 if (Planetarium.GetUniversalTime() != timestamp)
                 {
                     Vector3? impactPos = API.GetTrueImpactPosition();
