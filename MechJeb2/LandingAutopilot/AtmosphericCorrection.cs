@@ -121,7 +121,6 @@ namespace MuMech
             {
                 // primary directions come from trajectories, but we may change them in descend phase to stay on course
                 targetInfo.update();
-                bool isTransition = TrajectoriesConnector.API.isTransitionAlt();
                 switch (phase)
                 {
                     case Phase.waitForEntry:
@@ -231,7 +230,6 @@ namespace MuMech
                         {
                             TrajectoriesConnector.API.AoA = AoA;
                             logs += String.Format(", changed AoA=>{0:F1}", AoA);
-                            TrajectoriesConnector.API.invalidateCalculation();
                         }
                     }
                     else if (Math.Abs(backwardCorrection) > 0.02 )
@@ -241,7 +239,6 @@ namespace MuMech
                         {
                             TrajectoriesConnector.API.AoA = AoA;
                             logs += String.Format(", changed AoA=>{0:F1}", AoA);
-                            TrajectoriesConnector.API.invalidateCalculation();
                         }
                     }
                     if (aeroClamp && (core.thrust.targetThrottle != 0 || backwardCorrection > 0.03))

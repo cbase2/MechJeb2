@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using UnityEngine;
 
@@ -8,32 +9,114 @@ namespace MuMech
 {
     public class TrajectoriesConnector
     {
-        //ToDo: instantiate API with Reflections
+        const string assemblyname = "Trajectories";
+        const string apiclass = "Trajectories.API";
+        static public bool isLoadedTrajectories = ReflectionUtils.isAssemblyLoaded(assemblyname);
+
         public class API
         {
-            public static Vector3? GetTrueImpactPosition() { return Trajectories.API.GetTrueImpactPosition(); }
+            public delegate Vector3? DGetTrueImpactPosition();
+            public static DGetTrueImpactPosition GetTrueImpactPosition;
 
-            public static double? GetTimeTillImpact() { return Trajectories.API.GetTimeTillImpact(); }
+            public delegate double? DGetTimeTillImpact();
+            public static DGetTimeTillImpact GetTimeTillImpact;
 
-            public static bool isBelowEntry() { return Trajectories.API.isBelowEntry(); }
+            public delegate bool DisBelowEntry();
+            public static DisBelowEntry isBelowEntry;
 
-            public static bool isTransitionAlt() { return Trajectories.API.isTransitionAlt(); }
+            public delegate bool DHasTarget();
+            public static DHasTarget HasTarget;
 
+            public delegate Quaternion? DPlannedOrientation();
+            public static DPlannedOrientation PlannedOrientation;
+
+            public delegate void DinvalidateCalculation();
+            public static DinvalidateCalculation invalidateCalculation;
+
+            public delegate void DSetTarget(double lat, double lon);
+            public static DSetTarget SetTarget;
+
+            public delegate double? DAoAGetter();
+            public static DAoAGetter AoAGetter;
+
+            public delegate void DAoASetter(double? value);
+            public static DAoASetter AoASetter;
+
+            public delegate bool? DRetrogradeEntryGetter();
+            public static DRetrogradeEntryGetter RetrogradeEntryGetter;
+
+            // on class initialisation use reflections to resolve delegates
+            static API()
+            {
+                if (isLoadedTrajectories)
+                {
+                    var m = ReflectionUtils.getMethodByReflection(assemblyname, apiclass, "GetTrueImpactPosition", BindingFlags.Public | BindingFlags.Static);
+                    if (m != null)
+                        GetTrueImpactPosition = (DGetTrueImpactPosition)Delegate.CreateDelegate(typeof(DGetTrueImpactPosition), m);
+                    else
+                        isLoadedTrajectories = false;
+
+                    m = ReflectionUtils.getMethodByReflection(assemblyname, apiclass, "GetTimeTillImpact", BindingFlags.Public | BindingFlags.Static);
+                    if (m != null)
+                        GetTimeTillImpact = (DGetTimeTillImpact)Delegate.CreateDelegate(typeof(DGetTimeTillImpact), m);
+                    else
+                        isLoadedTrajectories = false;
+
+                    m = ReflectionUtils.getMethodByReflection(assemblyname, apiclass, "isBelowEntry", BindingFlags.Public | BindingFlags.Static);
+                    if (m != null)
+                        isBelowEntry = (DisBelowEntry)Delegate.CreateDelegate(typeof(DisBelowEntry), m);
+                    else
+                        isLoadedTrajectories = false;
+
+                    m = ReflectionUtils.getMethodByReflection(assemblyname, apiclass, "HasTarget", BindingFlags.Public | BindingFlags.Static);
+                    if (m != null)
+                        HasTarget = (DHasTarget)Delegate.CreateDelegate(typeof(DHasTarget), m);
+                    else
+                        isLoadedTrajectories = false;
+
+                    m = ReflectionUtils.getMethodByReflection(assemblyname, apiclass, "PlannedOrientation", BindingFlags.Public | BindingFlags.Static);
+                    if (m != null)
+                        PlannedOrientation = (DPlannedOrientation)Delegate.CreateDelegate(typeof(DPlannedOrientation), m);
+                    else
+                        isLoadedTrajectories = false;
+
+                    m = ReflectionUtils.getMethodByReflection(assemblyname, apiclass, "invalidateCalculation", BindingFlags.Public | BindingFlags.Static);
+                    if (m != null)
+                        invalidateCalculation = (DinvalidateCalculation)Delegate.CreateDelegate(typeof(DinvalidateCalculation), m);
+                    else
+                        isLoadedTrajectories = false;
+
+                    m = ReflectionUtils.getMethodByReflection(assemblyname, apiclass, "SetTarget", BindingFlags.Public | BindingFlags.Static, new Type[] { typeof(double), typeof(double) });
+                    if (m != null)
+                        SetTarget = (DSetTarget)Delegate.CreateDelegate(typeof(DSetTarget), m);
+                    else
+                        isLoadedTrajectories = false;
+
+                    var p = ReflectionUtils.getPropertyByReflection(assemblyname, apiclass, "AoA", BindingFlags.Public | BindingFlags.Static);
+                    if (p != null)
+                    {
+                        AoAGetter = (DAoAGetter)Delegate.CreateDelegate(typeof(DAoAGetter), p.GetMethod);
+                        AoASetter = (DAoASetter)Delegate.CreateDelegate(typeof(DAoASetter), p.SetMethod);
+                    }
+                    else
+                        isLoadedTrajectories = false;
+
+                    p = ReflectionUtils.getPropertyByReflection(assemblyname, apiclass, "RetrogradeEntry", BindingFlags.Public | BindingFlags.Static);
+                    if (p != null)
+                    {
+                        RetrogradeEntryGetter = (DRetrogradeEntryGetter)Delegate.CreateDelegate(typeof(DRetrogradeEntryGetter), p.GetMethod);
+                    }
+                    else
+                        isLoadedTrajectories = false;
+                }
+            }
+            
             public static double? AoA {
-                get { return Trajectories.API.AoA; }
-                set { Trajectories.API.AoA=value; }
+                get { return AoAGetter(); }
+                set { AoASetter(value); }
             }
 
-            public static bool? RetrogradeEntry { get { return Trajectories.API.RetrogradeEntry; } }
-
-            public static void SetTarget(double lat, double lon, double? alt = null)
-                { Trajectories.API.SetTarget(lat, lon, alt); }
-
-            public static bool HasTarget() { return Trajectories.API.HasTarget(); }
-
-            public static Quaternion? PlannedOrientation() { return Trajectories.API.PlannedOrientation(); }
-
-            public static void invalidateCalculation() { Trajectories.API.invalidateCalculation(); }
+            public static bool? RetrogradeEntry { get { return RetrogradeEntryGetter(); } }
         }
 
         // this is what is actually used in atmospheric landing
@@ -94,7 +177,7 @@ namespace MuMech
                         //float angle = (float)(timeTillImpact * mainBody.angularVelocity.magnitude / Math.PI * 180.0);
                         //trueTargetRadialVector = Quaternion.AngleAxis(angle, mainBody.angularVelocity.normalized) * trueTargetRadialVector;
                         trueTargetRadialVector = Quaternion.AngleAxis(-360f * (float) mainBody.rotPeriodRecip * Mathf.Lerp(0f, (float)timeTillImpact,(float) (vesselState.altitudeASL/mainBody.atmosphereDepth)), mainBody.RotationAxis) * trueTargetRadialVector;
-                        orbitNormal = target.orbit.SwappedOrbitNormal();
+                        orbitNormal = target.orbit.SwappedOrbitNormal(); 
 
                         orbitClosestToImpact = Vector3.ProjectOnPlane(trueImpactRadialVector, orbitNormal);
                         orbitClosestToTarget = Vector3.ProjectOnPlane(trueTargetRadialVector, orbitNormal);
@@ -125,7 +208,7 @@ namespace MuMech
             }
         }
 
-        //this is used to control descent for atmospheric landing
+        //convience wrapper around API AoA property
         static double airAngle = 0;
         public static double AoA
         {
@@ -141,7 +224,6 @@ namespace MuMech
             set
             {
                 API.AoA = value;
-                API.invalidateCalculation();
             }
         }
     }

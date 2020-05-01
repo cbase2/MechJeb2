@@ -153,7 +153,7 @@ namespace MuMech
                 {
                     plannedNode.RemoveSelf();
                     vessel.PlaceManeuverNode(vessel.orbit, OrbitalManeuverCalculator.DeltaVToChangePeriapsis(orbit, minUT, mainBody.Radius + core.landing.reentryTargetHeight), minUT);
-                    TrajectoriesConnector.API.invalidateCalculation();
+                    targetInfo.invalidateCalculation();
                     return true;
                 }
                 // factor accounts for ground movement during orbit round
@@ -166,10 +166,10 @@ namespace MuMech
 
             bool optimizePlaneChange()
             {
-                // modify Node to include required remaining planeChange
-                double lastPlaneChange = -2.0 * vesselState.speedOrbital * Math.Sin(0.5 * Math.Asin(targetInfo.normalDifference / targetInfo.distanceTarget.magnitude));
-                Debug.Log(String.Format("Autoland plane change {0:F1} for normalDiff={1:F1} ", (Vector3) (lastPlaneChange * orbit.GetOrbitNormal()), targetInfo.normalDifference));
-                vessel.patchedConicSolver.maneuverNodes[0].DeltaV += lastPlaneChange * orbit.GetOrbitNormal();
+                var node = vessel.patchedConicSolver.maneuverNodes[0];
+                double lastPlaneChange = -2.0 * vesselState.speedOrbital * targetInfo.normalDifference / (targetInfo.TrueImpactRadialVector - node.patch.getRelativePositionAtUT(node.UT)).magnitude;
+                Debug.Log(String.Format("Autoland plane change {0:F1} for normalDiff={1:F1} ", (Vector3) (lastPlaneChange * orbit.GetOrbitNormal()), targetInfo.normalDifference));                
+                node.UpdateNode( node.DeltaV + lastPlaneChange * Vector3d.up, node.UT);
                 return true;
             }
         }

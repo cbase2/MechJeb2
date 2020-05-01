@@ -27,64 +27,36 @@ namespace MuMech
             return false;
         }
 
-        public static FieldInfo getFieldByReflection(String assemblyString, String className, String fieldName, BindingFlags flags = BindingFlags.Public|BindingFlags.Instance|BindingFlags.Static) {
-                string assemblyName = "";
+        public static FieldInfo getFieldByReflection(String assemblyString, String className, String fieldName, BindingFlags flags = BindingFlags.Public|BindingFlags.Instance|BindingFlags.Static)
+        {
+            Type type = getTypeByReflection(assemblyString, className);
 
-                foreach (AssemblyLoader.LoadedAssembly loaded in AssemblyLoader.loadedAssemblies)
-                {
-                    if (loaded.assembly.GetName().Name == assemblyString)
-                    {
-                        assemblyName = loaded.assembly.FullName;
-                    }
-                }
-
-                if (assemblyName == "")
-                {
-                    Debug.Log("[MechJeb] ReflectionUtils: could not find assembly " + assemblyString);
-                    return null;
-                }
-
-                Type type = Type.GetType(className + ", " + assemblyName);
-
-                if (type == null)
-                {
-                    Debug.Log("[MechJeb] ReflectionUtils: could not find type  " + className + ", " + assemblyName);
-                    return null;
-                }
-
-                return type.GetField(fieldName, flags);
+            return type.GetField(fieldName, flags);
         }
 
         public static MethodInfo getMethodByReflection(String assemblyString, String className, String methodName, BindingFlags flags)
         {
-            string assemblyName = "";
+            Type type = getTypeByReflection(assemblyString, className);
 
-            foreach (AssemblyLoader.LoadedAssembly loaded in AssemblyLoader.loadedAssemblies)
-            {
-                if (loaded.assembly.GetName().Name == assemblyString)
-                {
-                    assemblyName = loaded.assembly.FullName;
-                }
-            }
-
-            if (assemblyName == "")
-            {
-                Debug.Log("[MechJeb] ReflectionUtils: could not find assembly " + assemblyString);
-                return null;
-            }
-
-            Type type = Type.GetType(className + ", " + assemblyName);
-
-            if (type == null)
-            {
-                Debug.Log("[MechJeb] ReflectionUtils: could not find type  " + className + ", " + assemblyName);
-                return null;
-            }
             return type.GetMethod(methodName, flags);
         }
 
         public static MethodInfo getMethodByReflection(String assemblyString, String className, String methodName, BindingFlags flags, Type[] args)
         {
+            Type type = getTypeByReflection(assemblyString, className);
+
+            return type.GetMethod(methodName, flags, null, args, null);
+        }
+
+        public static PropertyInfo getPropertyByReflection(String assemblyString, String className, String propertyName, BindingFlags flags)
+        {
+            Type type = getTypeByReflection(assemblyString, className);
+
+            return type.GetProperty(propertyName, flags);
+        }
+
+        public static Type getTypeByReflection(String assemblyString, String className)
+        {
             string assemblyName = "";
 
             foreach (AssemblyLoader.LoadedAssembly loaded in AssemblyLoader.loadedAssemblies)
@@ -108,7 +80,8 @@ namespace MuMech
                 Debug.Log("[MechJeb] ReflectionUtils: could not find type  " + className + ", " + assemblyName);
                 return null;
             }
-            return type.GetMethod(methodName, flags, null, args, null);
+            return type;
         }
+
     }
 }

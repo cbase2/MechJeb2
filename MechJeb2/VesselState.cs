@@ -974,11 +974,15 @@ namespace MuMech
                         partPureDrag += ls.dragForce;
                     }
                     //traj debug
-                    Trajectories.TrajectoriesDebug td = pm as Trajectories.TrajectoriesDebug;
-                    if (td != null)
+                    var TrajectoriesDebugType = ReflectionUtils.getTypeByReflection("Trajectories", "Trajectories.TrajectoriesDebug");
+                    if (TrajectoriesDebugType != null)
                     {
-                        partTrajLift += td.Lift;
-                        partTrajDrag += td.Drag;
+                        var td = Convert.ChangeType(pm, TrajectoriesDebugType);
+                        if (td != null)
+                        {
+                            partTrajLift += (Vector3) TrajectoriesDebugType.GetField("Lift").GetValue(td);
+                            partTrajDrag += (Vector3)TrajectoriesDebugType.GetField("Drag").GetValue(td);
+                        }
                     }
 
                     ModuleReactionWheel rw = pm as ModuleReactionWheel;
